@@ -186,3 +186,24 @@ class GraphConvolution(Layer):
             output += self.vars['bias']
 
         return self.act(output)
+
+class FullyConnection(Layer):
+    def __init__(self, input_dim, output_dim, placeholders, dropout=0.,
+                 sparse_inputs=False, act=tf.nn.softmax, bias=True,
+                 featureless=False, **kwargs):
+        super(FullyConnection, self).__init__(**kwargs)
+
+        self.act = act
+        self.support = placeholders['support']
+        self.sparse_inputs = sparse_inputs
+        self.featureless = featureless
+        self.bias = bias
+        self.input_dim=input_dim
+        self.output_dim=output_dim
+
+    def _call(self, inputs):
+        x = inputs
+        W = tf.Variable(tf.truncated_normal([self.input_dim,self.output_dim], stddev=0.01))
+        b = tf.Variable(tf.constant(0.0,shape=[self.output_dim]))
+
+        return self.act(tf.matmul(x, W) + b)

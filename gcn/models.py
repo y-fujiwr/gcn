@@ -1,4 +1,4 @@
-from gcn.layers import *
+from layers import *
 from gcn.metrics import *
 
 flags = tf.app.flags
@@ -147,7 +147,6 @@ class GCN(Model):
         # Weight decay loss
         for var in self.layers[0].vars.values():
             self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
-
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                   self.placeholders['labels_mask'])

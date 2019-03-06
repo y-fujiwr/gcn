@@ -4,8 +4,8 @@ from __future__ import print_function
 import time
 import tensorflow as tf
 
-from gcn.utils import *
-from gcn.models import GCN, MLP
+from utils import *
+from models import GCN, MLP
 
 # Set random seed
 seed = 123
@@ -15,7 +15,7 @@ tf.set_random_seed(seed)
 # Settings
 flags = tf.app.flags
 FLAGS = flags.FLAGS
-flags.DEFINE_string('dataset', 'cora', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
+flags.DEFINE_string('dataset', 'test_dataset', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs to train.')
@@ -27,7 +27,6 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 
 # Load data
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data(FLAGS.dataset)
-
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -54,7 +53,6 @@ placeholders = {
     'dropout': tf.placeholder_with_default(0., shape=()),
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
-
 # Create model
 model = model_func(placeholders, input_dim=features[2][1], logging=True)
 
@@ -84,7 +82,7 @@ for epoch in range(FLAGS.epochs):
     feed_dict.update({placeholders['dropout']: FLAGS.dropout})
 
     # Training step
-    outs = sess.run([model.opt_op, model.loss, model.accuracy], feed_dict=feed_dict)
+    outs = sess.run([model.opt_op, model.loss, model.accuracy, model.outputs], feed_dict=feed_dict)
 
     # Validation
     cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
@@ -105,3 +103,4 @@ print("Optimization Finished!")
 test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_mask, placeholders)
 print("Test set results:", "cost=", "{:.5f}".format(test_cost),
       "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
+
