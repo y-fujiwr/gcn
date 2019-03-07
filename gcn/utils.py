@@ -58,7 +58,7 @@ def load_data(dataset_str):
     print(graph)
     exit()
     """
-    allx, ally, tx, ty, graph = load_ast_features("data")
+    allx, ally, tx, ty, graph = load_ast_features(dataset_str)
     x = allx
     y = ally
     """

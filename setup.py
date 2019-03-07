@@ -12,7 +12,9 @@ setup(name='gcn',
       install_requires=['numpy',
                         'tensorflow',
                         'networkx',
-                        'scipy'
+                        'scipy',
+                        'matplotlib',
+                        'tqdm'
                         ],
       package_data={'gcn': ['README.md']},
       packages=find_packages())
