@@ -10,6 +10,7 @@ from collections import defaultdict
 from pathlib import Path
 
 NODE_TYPE_NUM = 201
+class_num = 10
 
 def get_input_features(ast_string, label, start_num):
     ast_stream = ast_string.split(" ")
@@ -76,7 +77,6 @@ def get_input_features(ast_string, label, start_num):
         graph[s_parent_na[i]+start_num].append(i+start_num)
     #adj_matrix = adj_matrix.tocsr()
 
-    class_num = 704
     labels = [[0] * class_num] * len(s_na)
     labels[0][label] = 1
 
