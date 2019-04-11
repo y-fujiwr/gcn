@@ -5,7 +5,7 @@ import scipy.sparse as sp
 from scipy.sparse.linalg.eigen.arpack import eigsh
 import sys
 from scipy import io
-from ast_analyze_executor import load_ast_features
+from ast_analyze_executor import load_ast_features, load_test_ast_features
 
 
 def parse_index_file(filename):
@@ -102,6 +102,13 @@ def load_data(dataset_str):
 
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
+def load_test_data(dataset_str):
+    allt, yt, graph, positions = load_test_ast_features(dataset_str)
+    features = allt.tolil()
+    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+
+    return adj, features, allt, yt, positions
+
 
 def sparse_to_tuple(sparse_mx):
     """Convert sparse matrix to tuple representation."""
@@ -153,6 +160,14 @@ def construct_feed_dict(features, support, labels, labels_mask, placeholders):
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
     feed_dict.update({placeholders['labels_mask']: labels_mask})
+    feed_dict.update({placeholders['features']: features})
+    feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
+    feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    return feed_dict
+
+def construct_test_feed_dict(features, support, placeholders):
+    """Construct feed dictionary."""
+    feed_dict = dict()
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})

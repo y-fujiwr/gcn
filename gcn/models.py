@@ -1,5 +1,5 @@
 from layers import *
-from gcn.metrics import *
+from metrics import *
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -130,19 +130,21 @@ class MLP(Model):
 
 
 class GCN(Model):
-    def __init__(self, placeholders, input_dim, **kwargs):
+    def __init__(self, placeholders, input_dim, output_dim=None, **kwargs):
         super(GCN, self).__init__(**kwargs)
 
         self.inputs = placeholders['features']
         self.input_dim = input_dim
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
-        self.output_dim = placeholders['labels'].get_shape().as_list()[1]
         self.placeholders = placeholders
-
+        if output_dim == None:
+            self.output_dim = placeholders['labels'].get_shape().as_list()[1]
+        else:
+            self.output_dim = output_dim
         self.optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
         self.build()
-
+    
     def _loss(self):
         # Weight decay loss
         for var in self.layers[0].vars.values():
@@ -164,13 +166,25 @@ class GCN(Model):
                                             dropout=True,
                                             sparse_inputs=True,
                                             logging=self.logging))
+        for i in range(FLAGS.layers):
+            self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
+                                            output_dim=FLAGS.hidden1,
+                                            placeholders=self.placeholders,
+                                            act=tf.nn.relu,
+                                            dropout=True,
+                                            logging=self.logging))
 
         self.layers.append(GraphConvolution(input_dim=FLAGS.hidden1,
                                             output_dim=self.output_dim,
                                             placeholders=self.placeholders,
-                                            act=lambda x: x,
+                                            act=tf.nn.softmax,
                                             dropout=True,
                                             logging=self.logging))
 
-    def predict(self):
-        return tf.nn.softmax(self.outputs)
+    def predict(self, model_load_dir, feed_dict):
+        with tf.Session() as sess:
+            saver = tf.train.Saver()
+            last_checkpoint = tf.train.latest_checkpoint(model_load_dir)
+            saver.restore(sess, last_checkpoint)
+            y_pred = sess.run([self.outputs], feed_dict=feed_dict)
+        return y_pred[0]
