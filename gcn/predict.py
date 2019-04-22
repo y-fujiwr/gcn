@@ -6,6 +6,7 @@ import tensorflow as tf
 import pickle
 import os
 import pandas as pd
+import shutil
 
 from utils import *
 from models import GCN, MLP
@@ -42,6 +43,7 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.weight_decay,
     FLAGS.layers
 )
+
 
 # Load data
 if FLAGS.mode == 'val':
@@ -103,7 +105,19 @@ with open(os.path.join(*["log",FLAGS.model_name+".txt"]),"w") as w:
         #G.render("tree/" + filename)
 result_table = pd.DataFrame(df,columns=["filename","label","predict"])
 fp = result_table[result_table["label"] != result_table["predict"]]
-print(fp["label"].value_counts())
+print(fp["label"].value_counts().index.values)
 
+target = fp["label"].value_counts().index.values
+i = 1
+while True:
+    additional_dataset_dir = "data/{}/train/copy{}".format(FLAGS.dataset,i)
+    if os.path.exists(additional_dataset_dir):
+        i+=1
+    else:
+        os.makedirs(additional_dataset_dir,True)
+        os.chmod(additional_dataset_dir,0o777)
+        for t in target:
+            shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
+        break
 
 
