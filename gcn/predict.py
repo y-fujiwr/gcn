@@ -31,6 +31,7 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('outputdim', 20, 'Number of dimension of output.')
+flags.DEFINE_string('mode', 'val', 'Mode of predict (val or test).')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -43,7 +44,10 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
 )
 
 # Load data
-adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.dataset))
+if FLAGS.mode == 'val':
+    adj, features, testdata, labels, positions = load_test_data("data/{}/val".format(FLAGS.dataset))
+else:
+    adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.dataset))
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -77,6 +81,7 @@ model = model_func(placeholders, input_dim=INPUT_DIM, output_dim=FLAGS.outputdim
 
 feed_dict = construct_test_feed_dict(features, support, placeholders)
 predicts = model.predict(model_load_dir=os.path.join("model", FLAGS.model_name), feed_dict=feed_dict)
+df = []
 with open(os.path.join(*["log",FLAGS.model_name+".txt"]),"w") as w:
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
@@ -88,16 +93,17 @@ with open(os.path.join(*["log",FLAGS.model_name+".txt"]),"w") as w:
         w.write("Answer:{}\nResult:".format(answer))
         w.write(str(result)+"\n")
         w.write(str(answer == result_label)+"\n")
+        
+        df.append([filename,answer,result_label])
 
         x = (predict == labels[pair[0]:pair[1]].argmax(axis=1))
-        print(filename)
-        print(predict)
-        print(result)
-        print()
         for i in range(len(predict)):
             if x[i] == False:
                 G.node(str(i),color="red")
         #G.render("tree/" + filename)
-    
+result_table = pd.DataFrame(df,columns=["filename","label","predict"])
+fp = result_table[result_table["label"] != result_table["predict"]]
+print(fp["label"].value_counts())
+
 
 
