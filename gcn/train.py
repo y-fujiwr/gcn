@@ -10,6 +10,15 @@ import sys
 from utils import *
 from models import GCN, MLP
 
+import requests
+
+def line_notify(msg):
+	line_token = 'htThV5RCliNCarubopToCi91nOpwuuw8iLbz5extQc9'
+	line_api = 'https://notify-api.line.me/api/notify'
+	payload = {'message': msg}
+	headers = {'Authorization': 'Bearer ' + line_token}
+	requests.post(line_api, data = payload, headers = headers)
+
 # Set random seed
 seed = 123
 np.random.seed(seed)
@@ -90,11 +99,15 @@ sess.run(tf.global_variables_initializer())
 
 cost_val = []
 try:
+    os.makedirs("model",True)
+    os.chmod("model",0o777)
     os.makedirs(os.path.join(*["model", FLAGS.model_name]), True)
+    os.chmod(os.path.join(*["model", FLAGS.model_name]), 0o777)
 except FileExistsError:
     pass
 try:
     os.makedirs("log", True)
+    os.chmod("log", 0o777)
 except FileExistsError:
     pass
 saver = tf.train.Saver()
@@ -131,3 +144,5 @@ print("Test set results:", "cost=", "{:.5f}".format(test_cost),
 
 with open(os.path.join(*["log","result.csv"]),"a") as r :
     r.write("{},{},{},{}\n".format(str(sys.argv[1:]).replace(",","_"),test_cost,test_acc,test_duration))
+
+line_notify("{}'s learning finished!".format(FLAGS.model_name))

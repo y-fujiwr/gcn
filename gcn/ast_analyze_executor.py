@@ -119,6 +119,22 @@ def get_input_features(ast_string, label, start_num):
             s_parent_na.append(x - len([n for n in parent_node_array[:x] if n == -2]))
             s_na.append(node_array[i])
 
+    num_1 = s_parent_na.count(1)
+    if num_1 >= 3:
+        for i in range(num_1-2):
+            s_parent_na.insert(3,2)
+            for j in range(4,len(s_parent_na)):
+                s_parent_na[j] += 1
+            for k in range(len(s_parent_na)-1,0,-1):
+                if s_parent_na[k] <= i+2:
+                    s_parent_na[k] -= 1
+                if s_parent_na[k] == i+1:
+                    break
+            temp = [0] * NODE_TYPE_NUM
+            temp[50] = 1
+            s_na.insert(3,temp)
+
+
     graph = defaultdict(list)
     #node_array = lil_matrix(np.array(s_na, dtype=np.float32)).tocsr()
     #adj_matrix = lil_matrix((len(s_na),len(s_na)))
@@ -247,7 +263,6 @@ def analyze_ast(ast_string,name):
                 if x != leaf:
                     parent_node_array[x] = -2
     parent_node_array[leaf] = 0
-
     s_parent_na = []
     s_na = []
     for i in range(len(parent_node_array)):
@@ -255,6 +270,22 @@ def analyze_ast(ast_string,name):
         if x != -2:
             s_parent_na.append(x - len([n for n in parent_node_array[:x] if n == -2]))
             s_na.append(node_array[i])
+
+    num_1 = s_parent_na.count(1)
+    if num_1 >= 3:
+        for i in range(num_1-2):
+            s_parent_na.insert(3,2)
+            for j in range(4,len(s_parent_na)):
+                s_parent_na[j] += 1
+            for k in range(len(s_parent_na)-1,0,-1):
+                if s_parent_na[k] <= i+2:
+                    s_parent_na[k] -= 1
+                if s_parent_na[k] == i+1:
+                    break
+            temp = [0] * NODE_TYPE_NUM
+            temp[50] = 1
+            s_na.insert(3,temp)
+
     G = Digraph(format="png")
     G.attr("node", shape ="circle")
     edges = []
@@ -264,8 +295,10 @@ def analyze_ast(ast_string,name):
     for i,j in edges:
         G.edge(str(i),str(j))
     for i in range(len(s_na)):
-        G.node(str(i), ruleNames[s_na[i].index(1)],color="blue")
+        G.node(str(i), str(s_na[i].index(1)) ,color="blue")
+        #G.node(str(i), ruleNames[s_na[i].index(1)],color="blue")
     G.render("tree/" + name)
+    print(s_parent_na)
     return G
 
 if __name__ == '__main__':

@@ -107,7 +107,7 @@ result_table = pd.DataFrame(df,columns=["filename","label","predict"])
 fp = result_table[result_table["label"] != result_table["predict"]]
 print(fp["label"].value_counts().index.values)
 
-if FLAGS.mode == test:
+if FLAGS.mode == "test":
     exit()
 
 target = fp["label"].value_counts().index.values
