@@ -23,7 +23,7 @@ def sample_mask(idx, l):
     return np.array(mask, dtype=np.bool)
 
 
-def load_data(dataset_str):
+def load_data(dataset_str, class_num):
     """
     Loads input data from gcn/data directory
 
@@ -58,7 +58,7 @@ def load_data(dataset_str):
     print(graph)
     exit()
     """
-    allx, ally, tx, ty, graph = load_ast_features(dataset_str)
+    allx, ally, tx, ty, graph = load_ast_features(dataset_str, class_num)
     x = allx
     y = ally
     """
@@ -102,8 +102,8 @@ def load_data(dataset_str):
 
     return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
 
-def load_test_data(dataset_str):
-    allt, yt, graph, positions = load_test_ast_features(dataset_str)
+def load_test_data(dataset_str, class_num):
+    allt, yt, graph, positions = load_test_ast_features(dataset_str, class_num)
     features = allt.tolil()
     adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
 

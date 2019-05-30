@@ -7,6 +7,7 @@ import pickle
 import os
 import pandas as pd
 import shutil
+import h5py
 
 from utils import *
 from models import GCN, MLP
@@ -31,8 +32,9 @@ flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of e
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
-flags.DEFINE_integer('outputdim', 20, 'Number of dimension of output.')
-flags.DEFINE_string('mode', 'val', 'Mode of predict (val or test).')
+flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
+flags.DEFINE_string('mode', 'test', 'Mode of predict (val or test).')
+flags.DEFINE_string('input', None, 'Test dataset string')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -43,13 +45,13 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.weight_decay,
     FLAGS.layers
 )
-
-
+if FLAGS.input == None:
+    FLAGS.input = FLAGS.dataset
 # Load data
 if FLAGS.mode == 'val':
-    adj, features, testdata, labels, positions = load_test_data("data/{}/val".format(FLAGS.dataset))
+    adj, features, testdata, labels, positions = load_test_data("data/{}/val".format(FLAGS.dataset), FLAGS.class_num)
 else:
-    adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.dataset))
+    adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.input), FLAGS.class_num)
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -67,8 +69,6 @@ elif FLAGS.model == 'dense':
 else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
 
-
-
 # Define placeholders
 placeholders = {
     'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
@@ -78,13 +78,17 @@ placeholders = {
     'dropout': tf.placeholder_with_default(0., shape=()),
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
+
 # Create model
-model = model_func(placeholders, input_dim=INPUT_DIM, output_dim=FLAGS.outputdim, logging=True)
+model = model_func(placeholders, input_dim=INPUT_DIM, output_dim=FLAGS.class_num, logging=True)
 
 feed_dict = construct_test_feed_dict(features, support, placeholders)
 predicts = model.predict(model_load_dir=os.path.join("model", FLAGS.model_name), feed_dict=feed_dict)
 df = []
-with open(os.path.join(*["log",FLAGS.model_name+".txt"]),"w") as w:
+log_name = os.path.join(*["log",FLAGS.model_name+".txt"])
+if FLAGS.mode == "test":
+    log_name = os.path.join(*["log",FLAGS.model_name+",test.txt"])
+with open(log_name,"w") as w:
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
         result = pd.Series(predict).value_counts(normalize=True)
@@ -101,11 +105,17 @@ with open(os.path.join(*["log",FLAGS.model_name+".txt"]),"w") as w:
         x = (predict == labels[pair[0]:pair[1]].argmax(axis=1))
         for i in range(len(predict)):
             if x[i] == False:
-                G.node(str(i),color="red")
+                G.node(str(i),str(predict[i]),color="red")
+            else:
+                G.node(str(i),str(predict[i]),color="blue")
         #G.render("tree/" + filename)
-result_table = pd.DataFrame(df,columns=["filename","label","predict"])
-fp = result_table[result_table["label"] != result_table["predict"]]
+    result_table = pd.DataFrame(df,columns=["filename","label","predict"])
+    fp = result_table[result_table["label"] != result_table["predict"]]
+    w.write("\nRecall:{}".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
+with open("recall.csv","a") as w:
+    w.write("{}\n".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
 print(fp["label"].value_counts().index.values)
+print(pd.Series(np.sum(labels,axis=0)))
 
 if FLAGS.mode == "test":
     exit()
@@ -122,5 +132,4 @@ while True:
         for t in target:
             shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
         break
-
-
+        

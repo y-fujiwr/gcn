@@ -11,7 +11,6 @@ from pathlib import Path
 from graphviz import Digraph
 
 NODE_TYPE_NUM = 201
-class_num = 20
 ruleNames = [
 		"translationunit", "primaryexpression", "idexpression", "unqualifiedid",
 		"qualifiedid", "nestednamespecifier", "lambdaexpression", "lambdaintroducer",
@@ -64,7 +63,7 @@ ruleNames = [
 		"typeidlist", "noexceptspecification", "rightShift", "rightShiftAssign",
 		"operator", "literal", "booleanliteral", "pointerliteral", "userdefinedliteral"
 ]
-def get_input_features(ast_string, label, start_num):
+def get_input_features(ast_string, label, start_num, class_num):
     ast_stream = ast_string.split(" ")
     node_array = []
     parent_node_array = []
@@ -150,14 +149,14 @@ def get_input_features(ast_string, label, start_num):
     #adj_matrix = adj_matrix.tocsr()
     for i,j in edges:
         G.edge(str(i),str(j))
-    for i in range(len(s_na)):
-        G.node(str(i), str(s_na[i].index(1)))
+    #for i in range(len(s_na)):
+        #G.node(str(i), str(s_na[i].index(1)))
     labels = [[0] * class_num] * len(s_na)
     labels[0][label] = 1
 
     return s_na, labels, graph, G #,adj_matrix
 
-def load_ast_features(target_dir_path):
+def load_ast_features(target_dir_path, class_num):
     fileGenerator = Path(target_dir_path, "train").glob("**/*.txt")
     start_num = 0
     train_node_arrays = [] 
@@ -167,7 +166,7 @@ def load_ast_features(target_dir_path):
     for f in tqdm(fileGenerator):
         for target in open(str(f),"r").readlines():
             label= int(str(f).split(os.path.sep)[-2])
-            node_array, label, graph, _ = get_input_features(target, label, start_num)
+            node_array, label, graph, _ = get_input_features(target, label, start_num, class_num)
             start_num += len(node_array)
             train_node_arrays.extend(node_array)
             train_labels.extend(label)
@@ -183,7 +182,7 @@ def load_ast_features(target_dir_path):
     for f in tqdm(fileGenerator):
         for target in open(str(f),"r").readlines():
             label = int(str(f).split(os.path.sep)[-2])
-            node_array, label, graph, _ = get_input_features(target, label, start_num)
+            node_array, label, graph, _ = get_input_features(target, label, start_num, class_num)
             start_num += len(node_array)
             test_node_arrays.extend(node_array)
             test_labels.extend(label)
@@ -194,7 +193,7 @@ def load_ast_features(target_dir_path):
     
     return train_node_arrays, train_labels, test_node_arrays, test_labels, graphs
 
-def load_test_ast_features(target_dir_path):
+def load_test_ast_features(target_dir_path, class_num):
     fileGenerator = Path(target_dir_path).glob("**/*.txt")
     start_num = 0
     test_node_arrays = []
@@ -205,7 +204,7 @@ def load_test_ast_features(target_dir_path):
     for f in tqdm(fileGenerator):
         for target in open(str(f),"r").readlines():
             label = int(str(f).split(os.path.sep)[-2])
-            node_array, label, graph, G = get_input_features(target, label, start_num)
+            node_array, label, graph, G = get_input_features(target, label, start_num, class_num)
             end_num = start_num + len(node_array)
             positions.append(((start_num, end_num),str(f),G))
             start_num = end_num

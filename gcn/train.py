@@ -9,6 +9,7 @@ import sys
 
 from utils import *
 from models import GCN, MLP
+import pandas as pd
 
 import requests
 
@@ -30,7 +31,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 1000, 'Number of epochs to train.')
+flags.DEFINE_integer('epochs', 2000, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 256, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
@@ -38,6 +39,7 @@ flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of e
 flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
+flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -50,7 +52,8 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
 )
 
 # Load data
-adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset))
+adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
+print(pd.Series(np.sum(y_train,axis=0)))
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -67,8 +70,6 @@ elif FLAGS.model == 'dense':
     model_func = MLP
 else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
-
-
 
 # Define placeholders
 placeholders = {
@@ -145,4 +146,7 @@ print("Test set results:", "cost=", "{:.5f}".format(test_cost),
 with open(os.path.join(*["log","result.csv"]),"a") as r :
     r.write("{},{},{},{}\n".format(str(sys.argv[1:]).replace(",","_"),test_cost,test_acc,test_duration))
 
-line_notify("{}'s learning finished!".format(FLAGS.model_name))
+line_notify("{}'s learning finished!\naccuracy:{}".format(FLAGS.model_name,test_acc))
+if test_acc >=0.8:
+    line_notify(str(pd.Series(np.sum(labels,axis=0))))
+

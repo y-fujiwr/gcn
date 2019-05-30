@@ -132,7 +132,6 @@ class MLP(Model):
 class GCN(Model):
     def __init__(self, placeholders, input_dim, output_dim=None, **kwargs):
         super(GCN, self).__init__(**kwargs)
-
         self.inputs = placeholders['features']
         self.input_dim = input_dim
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions
