@@ -216,15 +216,18 @@ def load_test_ast_features(target_dir_path, class_num):
     graphs = defaultdict(list)
     print("load test data...")
     for f in tqdm(fileGenerator):
-        for target in open(str(f),"r").readlines():
-            label = int(str(f).split(os.path.sep)[-2])
-            node_array, label, graph, G = get_input_features(target, label, start_num, class_num)
-            end_num = start_num + len(node_array)
-            positions.append(((start_num, end_num),str(f),G))
-            start_num = end_num
-            test_node_arrays.extend(node_array)
-            test_labels.extend(label)
-            graphs.update(graph)
+        try:
+            for target in open(str(f),"r").readlines():
+                label = int(str(f).split(os.path.sep)[-2])
+                node_array, label, graph, G = get_input_features(target, label, start_num, class_num)
+                end_num = start_num + len(node_array)
+                positions.append(((start_num, end_num),str(f),G))
+                start_num = end_num
+                test_node_arrays.extend(node_array)
+                test_labels.extend(label)
+                graphs.update(graph)
+        except IndexError:
+            print(f)
     test_node_arrays = lil_matrix(np.array(test_node_arrays, dtype=np.float32)).tocsr()
     test_labels = np.array(test_labels, dtype=np.int32)
 
