@@ -16,7 +16,9 @@ from models import GCN, MLP
 seed = 123
 np.random.seed(seed)
 tf.set_random_seed(seed)
-INPUT_DIM = 201
+INPUT_DIM = 84
+#C:201
+#java:84
 
 # Settings
 flags = tf.app.flags
@@ -49,7 +51,7 @@ if FLAGS.input == None:
     FLAGS.input = FLAGS.dataset
 # Load data
 if FLAGS.mode == 'val':
-    adj, features, testdata, labels, positions = load_test_data("data/{}/val".format(FLAGS.dataset), FLAGS.class_num)
+    adj, features, testdata, labels, positions = load_test_data("data/{}/train".format(FLAGS.dataset), FLAGS.class_num)
 else:
     adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.input), FLAGS.class_num)
 # Some preprocessing
@@ -85,9 +87,9 @@ model = model_func(placeholders, input_dim=INPUT_DIM, output_dim=FLAGS.class_num
 feed_dict = construct_test_feed_dict(features, support, placeholders)
 predicts = model.predict(model_load_dir=os.path.join("model", FLAGS.model_name), feed_dict=feed_dict)
 df = []
-log_name = os.path.join(*["log",FLAGS.model_name+".txt"])
+log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+".txt"])
 if FLAGS.mode == "test":
-    log_name = os.path.join(*["log",FLAGS.model_name+",test.txt"])
+    log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+",test.txt"])
 with open(log_name,"w") as w:
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
@@ -112,7 +114,7 @@ with open(log_name,"w") as w:
     result_table = pd.DataFrame(df,columns=["filename","label","predict"])
     fp = result_table[result_table["label"] != result_table["predict"]]
     w.write("\nRecall:{}".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
-with open("recall.csv","a") as w:
+with open("log/{}/recall.csv".format(FLAGS.dataset),"a") as w:
     w.write("{}\n".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
 print(fp["label"].value_counts().index.values)
 print(pd.Series(np.sum(labels,axis=0)))

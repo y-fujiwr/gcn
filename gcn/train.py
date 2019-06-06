@@ -53,7 +53,6 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
 
 # Load data
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
-print(pd.Series(np.sum(y_train,axis=0)))
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -107,8 +106,8 @@ try:
 except FileExistsError:
     pass
 try:
-    os.makedirs("log", True)
-    os.chmod("log", 0o777)
+    os.makedirs("log/{}".format(FLAGS.dataset), True)
+    os.chmod("log/{}".format(FLAGS.dataset), 0o777)
 except FileExistsError:
     pass
 saver = tf.train.Saver()
@@ -143,7 +142,7 @@ test_cost, test_acc, test_duration = evaluate(features, support, y_test, test_ma
 print("Test set results:", "cost=", "{:.5f}".format(test_cost),
       "accuracy=", "{:.5f}".format(test_acc), "time=", "{:.5f}".format(test_duration))
 
-with open(os.path.join(*["log","result.csv"]),"a") as r :
+with open(os.path.join(*["log",FLAGS.dataset,"result.csv"]),"a") as r :
     r.write("{},{},{},{}\n".format(str(sys.argv[1:]).replace(",","_"),test_cost,test_acc,test_duration))
 
 line_notify("{}'s learning finished!\naccuracy:{}".format(FLAGS.model_name,test_acc))

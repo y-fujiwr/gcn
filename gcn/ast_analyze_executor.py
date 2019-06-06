@@ -12,7 +12,9 @@ from graphviz import Digraph
 import pandas as pd
 from gensim.models.word2vec import Word2Vec
 
-NODE_TYPE_NUM = 201
+NODE_TYPE_NUM = 84
+#C:201
+#java:84
 ruleNames = [
 		"translationunit", "primaryexpression", "idexpression", "unqualifiedid",
 		"qualifiedid", "nestednamespecifier", "lambdaexpression", "lambdaintroducer",
@@ -71,7 +73,7 @@ def get_input_features(ast_string, label, start_num, class_num):
     parent_node_array = []
     pointer = -1
     terminal_flag = False
-    w2v = Word2Vec.load("model/node_w2v_128").wv
+    #w2v = Word2Vec.load("model/node_w2v_128").wv
     for node in ast_stream:
         if terminal_flag:
             node_array = []
@@ -79,13 +81,15 @@ def get_input_features(ast_string, label, start_num, class_num):
             terminal_flag = False
         if(node[0]=="("):
             if(len(node) > 1):
-                #temp = [0] * NODE_TYPE_NUM
-                #temp[int(node[1:])] = 1
-                #node_array.append(temp)
+                temp = [0] * NODE_TYPE_NUM
+                temp[int(node[1:])] = 1
+                node_array.append(temp)
+                """
                 if node[1:] in w2v:
                     node_array.append(w2v[node[1:]].tolist())
                 else:
                     node_array.append([0]*128)
+                """
                 parent_node_array.append(pointer)
                 pointer = len(parent_node_array) - 1 
         else:
@@ -138,8 +142,8 @@ def get_input_features(ast_string, label, start_num, class_num):
                     break
             temp = [0] * NODE_TYPE_NUM
             temp[50] = 1
-            #s_na.insert(3,temp)
-            s_na.insert(3,w2v["50"].tolist())
+            s_na.insert(3,temp)
+            #s_na.insert(3,w2v["50"].tolist())
 
     graph = defaultdict(list)
     #node_array = lil_matrix(np.array(s_na, dtype=np.float32)).tocsr()
@@ -171,13 +175,16 @@ def load_ast_features(target_dir_path, class_num):
     graphs = defaultdict(list)
     print("load train data...")
     for f in tqdm(fileGenerator):
-        for target in open(str(f),"r").readlines():
-            label= int(str(f).split(os.path.sep)[-2])
-            node_array, label, graph, _ = get_input_features(target, label, start_num, class_num)
-            start_num += len(node_array)
-            train_node_arrays.extend(node_array)
-            train_labels.extend(label)
-            graphs.update(graph)
+        try:
+            for target in open(str(f),"r").readlines():
+                label= int(str(f).split(os.path.sep)[-2])
+                node_array, label, graph, _ = get_input_features(target, label, start_num, class_num)
+                start_num += len(node_array)
+                train_node_arrays.extend(node_array)
+                train_labels.extend(label)
+                graphs.update(graph)
+        except IndexError:
+            print(f)
     train_node_arrays = lil_matrix(np.array(train_node_arrays, dtype=np.float32)).tocsr()
     train_labels = np.array(train_labels, dtype=np.int32)
     
@@ -326,7 +333,6 @@ if __name__ == '__main__':
     #logger = logging.getLogger(__file__)
 
     target_file = args[1]
-    #analyze_ast(open(target_file, "r").readline(), Path(target_file).name)
-    node_embedding(target_file)
-
-    
+    analyze_ast(open(target_file, "r").readline(), Path(target_file).name)
+    #node_embedding(target_file)
+   
