@@ -6,6 +6,8 @@ import tensorflow as tf
 import pickle
 import os
 import sys
+import scipy
+import random
 
 from utils import *
 from models import GCN, MLP
@@ -52,11 +54,23 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
 )
 
 # Load data
-adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
+adj_train, adj_val, features_train_raw, features_val_raw, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
+
 # Some preprocessing
-features = preprocess_features(features)
+features_train = []
+features_val = []
+for i in range(len(features_train_raw)):
+    features_train.append(preprocess_features(features_train_raw[i]))
+for i in range(len(features_val_raw)):
+    features_val.append(preprocess_features(features_val_raw[i]))
+
+support_train = []
+support_val = []
 if FLAGS.model == 'gcn':
-    support = [preprocess_adj(adj)]
+    for i in range(len(adj_train)):
+        support_train.append([preprocess_adj(adj_train[i])])
+    for i in range(len(adj_val)):
+        support_val.append([preprocess_adj(adj_val[i])])
     num_supports = 1
     model_func = GCN
 elif FLAGS.model == 'gcn_cheby':
@@ -73,30 +87,28 @@ else:
 # Define placeholders
 placeholders = {
     'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
-    'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features[2], dtype=tf.int64)),
-    'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
-    'labels_mask': tf.placeholder(tf.int32),
+    'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features_train[0][2], dtype=tf.int64)),
+    'labels': tf.placeholder(tf.float32, shape=(None, y_train[0].shape[1])),
+    #'labels_mask': tf.placeholder(tf.int32),
     'dropout': tf.placeholder_with_default(0., shape=()),
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 # Create model
-model = model_func(placeholders, input_dim=features[2][1], logging=True)
-
+model = model_func(placeholders, input_dim=features_train[0][2][1], logging=True)
 # Initialize session
 sess = tf.Session()
 
 
 # Define model evaluation function
-def evaluate(features, support, labels, mask, placeholders):
+def evaluate(features, support, labels, placeholders):
     t_test = time.time()
-    feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
+    feed_dict_val = construct_feed_dict(features, support, labels, placeholders)
     outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
     return outs_val[0], outs_val[1], (time.time() - t_test)
 
 
 # Init variables
 sess.run(tf.global_variables_initializer())
-
 cost_val = []
 try:
     os.makedirs("model",True)
@@ -113,20 +125,25 @@ except FileExistsError:
 saver = tf.train.Saver()
 # Train model
 for epoch in range(FLAGS.epochs):
-
     t = time.time()
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-    # Training step
-    outs = sess.run([model.opt_op, model.loss, model.accuracy, model.outputs], feed_dict=feed_dict)
-    # Validation
-    cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
-    cost_val.append(cost)
-
-    # Print results
-    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
-          "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
+    loss_all = 0
+    acc_all = 0
+    for i in random.sample(list(range(len(features_train))), len(features_train)):
+        # Construct feed dictionary
+        feed_dict = construct_feed_dict(features_train[i], support_train[i], y_train[i], placeholders)
+        feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+        # Training step
+        outs = sess.run([model.opt_op, model.loss, model.accuracy, model.outputs], feed_dict=feed_dict)
+        loss_all += outs[1]/len(features_train)
+        acc_all += outs[2]/len(features_train)
+        # Validation
+    for i in range(len(features_val)):
+        cost, acc, duration = evaluate(features_val[i], support_val[i], y_val[i], placeholders)
+        cost_val.append(cost)
+    
+        # Print results
+    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(loss_all),
+          "train_acc=", "{:.5f}".format(acc_all), "val_loss=", "{:.5f}".format(cost),
           "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
     """
     if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):

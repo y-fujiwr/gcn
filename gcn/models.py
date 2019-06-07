@@ -149,12 +149,10 @@ class GCN(Model):
         for var in self.layers[0].vars.values():
             self.loss += FLAGS.weight_decay * tf.nn.l2_loss(var)
         # Cross entropy error
-        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
-                                                  self.placeholders['labels_mask'])
+        self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'])#,self.placeholders['labels_mask'])
 
     def _accuracy(self):
-        self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
-                                        self.placeholders['labels_mask'])
+        self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'])#,self.placeholders['labels_mask'])
 
     def _build(self):
 

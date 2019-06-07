@@ -58,15 +58,14 @@ def load_data(dataset_str, class_num):
     print(graph)
     exit()
     """
-    allx, ally, tx, ty, graph = load_ast_features(dataset_str, class_num)
+    allx, ally, allgraph, tx, ty, tgraph = load_ast_features(dataset_str, class_num)
     x = allx
     y = ally
     """
     test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset_str))
     test_idx_range = np.sort(test_idx_reorder)
     """
-    test_idx_range = np.array(range(len(allx.getnnz(axis=1)), len(allx.getnnz(axis=1)) + len(tx.getnnz(axis=1))), dtype=np.int32)
-    
+    test_idx_range = np.array(range(len(allx), len(allx) + len(tx)), dtype=np.int32)
     """
     if dataset_str == 'citeseer':
         # Fix citeseer dataset (there are some isolated nodes in the graph)
@@ -79,16 +78,26 @@ def load_data(dataset_str, class_num):
         ty_extended[test_idx_range-min(test_idx_range), :] = ty
         ty = ty_extended
     """
-    
-    features = sp.vstack((allx, tx)).tolil()
+    allfeatures = []
+    for i in range(len(allx)):
+        allfeatures.append(allx[i].tolil())
+    tfeatures = []
+    for i in range(len(tx)):
+        tfeatures.append(tx[i].tolil())
     #features[test_idx_reorder, :] = features[test_idx_range, :]
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+    alladjs = []
+    for i in range(len(allgraph)):
+        alladjs.append(nx.adjacency_matrix(nx.from_dict_of_lists(allgraph[i])))
+    tadjs = []
+    for i in range(len(tgraph)):
+        tadjs.append(nx.adjacency_matrix(nx.from_dict_of_lists(tgraph[i])))
     labels = np.vstack((ally, ty))
     #labels[test_idx_reorder, :] = labels[test_idx_range, :]
     idx_test = test_idx_range.tolist()
     idx_train = range(len(ally))
     idx_val = range(len(ally), len(ally)+len(ty))
-
+    
+    #↓意味が分かっていない
     train_mask = sample_mask(idx_train, labels.shape[0])
     val_mask = sample_mask(idx_val, labels.shape[0])
     test_mask = sample_mask(idx_test, labels.shape[0])
@@ -100,14 +109,16 @@ def load_data(dataset_str, class_num):
     y_val[val_mask, :] = labels[val_mask, :]
     y_test[test_mask, :] = labels[test_mask, :]
 
-    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
+    return alladjs, tadjs, allfeatures, tfeatures, ally, ty, y_test, train_mask, val_mask, test_mask
 
 def load_test_data(dataset_str, class_num):
     allt, yt, graph, positions = load_test_ast_features(dataset_str, class_num)
     features = allt.tolil()
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
+    adjs = []
+    for i in range(len(graph)):
+        adjs.append(nx.adjacency_matrix(nx.from_dict_of_lists(graph[i])))
 
-    return adj, features, allt, yt, positions
+    return adjs, features, allt, yt, positions
 
 
 def sparse_to_tuple(sparse_mx):
@@ -155,11 +166,11 @@ def preprocess_adj(adj):
     return sparse_to_tuple(adj_normalized)
 
 
-def construct_feed_dict(features, support, labels, labels_mask, placeholders):
+def construct_feed_dict(features, support, labels, placeholders):#labels_mask, placeholders):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
-    feed_dict.update({placeholders['labels_mask']: labels_mask})
+    #feed_dict.update({placeholders['labels_mask']: labels_mask})
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
