@@ -5,7 +5,8 @@ import scipy.sparse as sp
 from scipy.sparse.linalg.eigen.arpack import eigsh
 import sys
 from scipy import io
-from ast_analyze_executor import load_ast_features, load_test_ast_features
+from ast_analyze_executor import load_ast_features, load_test_ast_features, NODE_TYPE_NUM
+from scipy.sparse import lil_matrix, csr_matrix
 
 
 def parse_index_file(filename):
@@ -85,12 +86,6 @@ def load_data(dataset_str, class_num):
     for i in range(len(tx)):
         tfeatures.append(tx[i].tolil())
     #features[test_idx_reorder, :] = features[test_idx_range, :]
-    alladjs = []
-    for i in range(len(allgraph)):
-        alladjs.append(nx.adjacency_matrix(nx.from_dict_of_lists(allgraph[i])))
-    tadjs = []
-    for i in range(len(tgraph)):
-        tadjs.append(nx.adjacency_matrix(nx.from_dict_of_lists(tgraph[i])))
     labels = np.vstack((ally, ty))
     #labels[test_idx_reorder, :] = labels[test_idx_range, :]
     idx_test = test_idx_range.tolist()
@@ -109,7 +104,7 @@ def load_data(dataset_str, class_num):
     y_val[val_mask, :] = labels[val_mask, :]
     y_test[test_mask, :] = labels[test_mask, :]
 
-    return alladjs, tadjs, allfeatures, tfeatures, ally, ty, y_test, train_mask, val_mask, test_mask
+    return allgraph, tgraph, allfeatures, tfeatures, ally, ty, y_test, train_mask, val_mask, test_mask
 
 def load_test_data(dataset_str, class_num):
     allt, yt, graph, positions = load_test_ast_features(dataset_str, class_num)
@@ -206,3 +201,38 @@ def chebyshev_polynomials(adj, k):
         t_k.append(chebyshev_recurrence(t_k[-1], t_k[-2], scaled_laplacian))
 
     return sparse_to_tuple(t_k)
+
+def minibatch(graphs,features,labels,batchsize):
+    newGraphs = []
+    newFeatures = []
+    newLabels = []
+    tempG = []
+    tempF = []
+    tempL = []
+    for i in range(len(graphs)):
+        if i % batchsize == 0:
+            tempG = graphs[i]
+            tempF = list(features[i].toarray())
+            tempL = list(labels[i])
+        else:
+            maxkey = max(tempG.keys())
+            for j in graphs[i].keys():
+                tempG[j+maxkey+1] = list(map(lambda x: x+maxkey+1, graphs[i][j]))
+            tempF.extend(list(features[i].toarray()))
+            tempL.extend(list(labels[i]))
+        if i % batchsize == batchsize - 1 :
+            newGraphs.append(tempG)
+            newFeatures.append(lil_matrix(tempF).tocsr())
+            newLabels.append(np.array(tempL, dtype=np.int32))
+        elif  i == len(graphs) - 1:
+            maxkey = max(tempG.keys())
+            for j in range(maxkey+1,(max(graphs[i].keys())+1)*batchsize):
+                tempG[j]
+            add_num = (max(graphs[i].keys())+1)*batchsize - (maxkey+1)
+            tempF.extend(np.array([[0] * NODE_TYPE_NUM] * add_num,dtype=np.float32))
+            dummyLabel = [[0] * len(labels[0][0])] * add_num
+            tempL.extend(np.array(dummyLabel,dtype=np.int32))
+            newGraphs.append(tempG)
+            newFeatures.append(lil_matrix(tempF).tocsr())
+            newLabels.append(np.array(tempL, dtype=np.int32))
+    return newGraphs, newFeatures, newLabels

@@ -12,6 +12,7 @@ import random
 from utils import *
 from models import GCN, MLP
 import pandas as pd
+import networkx as nx
 
 import requests
 
@@ -42,6 +43,7 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
+flags.DEFINE_integer('batchsize', 128, 'Number of minibatch size.')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -54,13 +56,20 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
 )
 
 # Load data
-adj_train, adj_val, features_train_raw, features_val_raw, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
+graph_train_raw, graph_val_raw, features_train_raw, features_val_raw, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
+graph_train_batch, features_train_batch, y_train_batch = minibatch(graph_train_raw,features_train_raw,y_train,FLAGS.batchsize)
+adj_train = []
+for i in range(len(graph_train_batch)):
+    adj_train.append(nx.adjacency_matrix(nx.from_dict_of_lists(graph_train_batch[i])))
+adj_val = []
+for i in range(len(graph_val_raw)):
+    adj_val.append(nx.adjacency_matrix(nx.from_dict_of_lists(graph_val_raw[i])))
 
 # Some preprocessing
 features_train = []
 features_val = []
-for i in range(len(features_train_raw)):
-    features_train.append(preprocess_features(features_train_raw[i]))
+for i in range(len(features_train_batch)):
+    features_train.append(preprocess_features(features_train_batch[i]))
 for i in range(len(features_val_raw)):
     features_val.append(preprocess_features(features_val_raw[i]))
 
@@ -83,16 +92,16 @@ elif FLAGS.model == 'dense':
     model_func = MLP
 else:
     raise ValueError('Invalid argument for model: ' + str(FLAGS.model))
-
 # Define placeholders
 placeholders = {
     'support': [tf.sparse_placeholder(tf.float32) for _ in range(num_supports)],
     'features': tf.sparse_placeholder(tf.float32, shape=tf.constant(features_train[0][2], dtype=tf.int64)),
-    'labels': tf.placeholder(tf.float32, shape=(None, y_train[0].shape[1])),
+    'labels': tf.placeholder(tf.float32, shape=(None, y_train_batch[0].shape[1])),
     #'labels_mask': tf.placeholder(tf.int32),
     'dropout': tf.placeholder_with_default(0., shape=()),
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
+print(y_train_batch[0].shape[1])
 # Create model
 model = model_func(placeholders, input_dim=features_train[0][2][1], logging=True)
 # Initialize session
@@ -130,7 +139,7 @@ for epoch in range(FLAGS.epochs):
     acc_all = 0
     for i in random.sample(list(range(len(features_train))), len(features_train)):
         # Construct feed dictionary
-        feed_dict = construct_feed_dict(features_train[i], support_train[i], y_train[i], placeholders)
+        feed_dict = construct_feed_dict(features_train[i], support_train[i], y_train_batch[i], placeholders)
         feed_dict.update({placeholders['dropout']: FLAGS.dropout})
         # Training step
         outs = sess.run([model.opt_op, model.loss, model.accuracy, model.outputs], feed_dict=feed_dict)
