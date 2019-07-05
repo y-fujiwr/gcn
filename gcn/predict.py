@@ -16,7 +16,7 @@ from models import GCN, MLP
 seed = 123
 np.random.seed(seed)
 tf.set_random_seed(seed)
-INPUT_DIM = 84
+INPUT_DIM = 201
 #C:201
 #java:84
 
@@ -37,6 +37,7 @@ flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_string('mode', 'test', 'Mode of predict (val or test).')
 flags.DEFINE_string('input', None, 'Test dataset string')
+flags.DEFINE_integer('input_dim',201,'Dimension of input vectors. Java:84, C:201')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -51,9 +52,9 @@ if FLAGS.input == None:
     FLAGS.input = FLAGS.dataset
 # Load data
 if FLAGS.mode == 'val':
-    adj, features, testdata, labels, positions = load_test_data("data/{}/train".format(FLAGS.dataset), FLAGS.class_num)
+    adj, features, testdata, labels, positions = load_test_data("data/{}/train".format(FLAGS.dataset), FLAGS.class_num, FLAGS.input_dim)
 else:
-    adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.input), FLAGS.class_num)
+    adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.input), FLAGS.class_num, FLAGS.input_dim)
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -90,6 +91,8 @@ df = []
 log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+".txt"])
 if FLAGS.mode == "test":
     log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+",test.txt"])
+os.makedirs("log/{}".format(FLAGS.dataset),exist_ok=True)
+os.chmod("log/{}".format(FLAGS.dataset),0o777)
 with open(log_name,"w") as w:
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
@@ -117,7 +120,7 @@ with open(log_name,"w") as w:
 with open("log/{}/recall.csv".format(FLAGS.dataset),"a") as w:
     w.write("{}\n".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
 print(fp["label"].value_counts().index.values)
-print(pd.Series(np.sum(labels,axis=0)))
+#print(pd.Series(np.sum(labels,axis=0)))
 
 if FLAGS.mode == "test":
     exit()
@@ -129,9 +132,11 @@ while True:
     if os.path.exists(additional_dataset_dir):
         i+=1
     else:
-        os.makedirs(additional_dataset_dir,True)
-        os.chmod(additional_dataset_dir,0o777)
-        for t in target:
-            shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
         break
+os.makedirs(additional_dataset_dir,True)
+os.chmod(additional_dataset_dir,0o777)
+for t in target:
+    if t not in [1,3,6,8]:
+        shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
+
         

@@ -40,6 +40,7 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
+flags.DEFINE_integer('input_dim', 201, 'Dimension of input vectors. Java:84, C:201')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -52,7 +53,7 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
 )
 
 # Load data
-adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num)
+adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num, FLAGS.input_dim)
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':

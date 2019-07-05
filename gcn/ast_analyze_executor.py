@@ -11,63 +11,9 @@ from pathlib import Path
 from graphviz import Digraph
 import pandas as pd
 from gensim.models.word2vec import Word2Vec
+from rulenames import ruleNames_C
 
-NODE_TYPE_NUM = 84
-#C:201
-#java:84
-ruleNames = [
-		"translationunit", "primaryexpression", "idexpression", "unqualifiedid",
-		"qualifiedid", "nestednamespecifier", "lambdaexpression", "lambdaintroducer",
-		"lambdacapture", "capturedefault", "capturelist", "capture", "simplecapture",
-		"initcapture", "lambdadeclarator", "postfixexpression", "expressionlist",
-		"pseudodestructorname", "unaryexpression", "unaryoperator", "newexpression",
-		"newplacement", "newtypeid", "newdeclarator", "noptrnewdeclarator", "newinitializer",
-		"deleteexpression", "noexceptexpression", "castexpression", "pmexpression",
-		"multiplicativeexpression", "additiveexpression", "shiftexpression", "relationalexpression",
-		"equalityexpression", "andexpression", "exclusiveorexpression", "inclusiveorexpression",
-		"logicalandexpression", "logicalorexpression", "conditionalexpression",
-		"assignmentexpression", "assignmentoperator", "expression", "constantexpression",
-		"nestedParenthesesBlock", "statement", "labeledstatement", "expressionstatement",
-		"compoundstatement", "statementseq", "selectionstatement", "condition",
-		"iterationstatement", "forinitstatement", "forrangedeclaration", "forrangeinitializer",
-		"jumpstatement", "unknownstatement", "declarationstatement", "declarationseq",
-		"declaration", "blockdeclaration", "aliasdeclaration", "simpledeclaration",
-		"static_assertdeclaration", "emptydeclaration", "attributedeclaration",
-		"declspecifier", "declspecifierseq", "storageclassspecifier", "functionspecifier",
-		"typedefname", "typespecifier", "trailingtypespecifier", "typespecifierseq",
-		"trailingtypespecifierseq", "simpletypespecifier", "typename", "decltypespecifier",
-		"elaboratedtypespecifier", "enumname", "enumspecifier", "enumhead", "opaqueenumdeclaration",
-		"enumkey", "enumbase", "enumeratorlist", "enumeratordefinition", "enumerator",
-		"namespacename", "originalnamespacename", "namespacedefinition", "namednamespacedefinition",
-		"originalnamespacedefinition", "extensionnamespacedefinition", "unnamednamespacedefinition",
-		"namespacebody", "namespacealias", "namespacealiasdefinition", "qualifiednamespacespecifier",
-		"usingdeclaration", "usingdirective", "asmdefinition", "linkagespecification",
-		"attributespecifierseq", "attributespecifier", "alignmentspecifier", "attributelist",
-		"attribute", "attributetoken", "attributescopedtoken", "attributenamespace",
-		"attributeargumentclause", "balancedtokenseq", "balancedtoken", "initdeclaratorlist",
-		"initdeclarator", "declarator", "ptrdeclarator", "noptrdeclarator", "parametersandqualifiers",
-		"trailingreturntype", "ptroperator", "cvqualifierseq", "cvqualifier",
-		"refqualifier", "declaratorid", "typeid", "abstractdeclarator", "ptrabstractdeclarator",
-		"noptrabstractdeclarator", "abstractpackdeclarator", "noptrabstractpackdeclarator",
-		"parameterdeclarationclause", "parameterdeclarationlist", "parameterdeclaration",
-		"functiondefinition", "functionbody", "initializer", "braceorequalinitializer",
-		"initializerclause", "initializerlist", "bracedinitlist", "classname",
-		"classspecifier", "classhead", "classheadname", "classvirtspecifier",
-		"classkey", "memberspecification", "memberdeclaration", "memberdeclaratorlist",
-		"memberdeclarator", "virtspecifierseq", "virtspecifier", "purespecifier",
-		"baseclause", "basespecifierlist", "basespecifier", "classordecltype",
-		"basetypespecifier", "accessspecifier", "conversionfunctionid", "conversiontypeid",
-		"conversiondeclarator", "ctorinitializer", "meminitializerlist", "meminitializer",
-		"meminitializerid", "operatorfunctionid", "literaloperatorid", "templatedeclaration",
-		"templateparameterlist", "templateparameter", "typeparameter", "simpletemplateid",
-		"templateid", "templatename", "templateargumentlist", "templateargument",
-		"typenamespecifier", "explicitinstantiation", "explicitspecialization",
-		"tryblock", "functiontryblock", "handlerseq", "handler", "exceptiondeclaration",
-		"throwexpression", "exceptionspecification", "dynamicexceptionspecification",
-		"typeidlist", "noexceptspecification", "rightShift", "rightShiftAssign",
-		"operator", "literal", "booleanliteral", "pointerliteral", "userdefinedliteral"
-]
-def get_input_features(ast_string, label, start_num, class_num):
+def get_input_features(ast_string, label, start_num, class_num, NODE_TYPE_NUM):
     ast_stream = ast_string.split(" ")
     node_array = []
     parent_node_array = []
@@ -167,7 +113,7 @@ def get_input_features(ast_string, label, start_num, class_num):
 
     return s_na, labels, graph, G #,adj_matrix
 
-def load_ast_features(target_dir_path, class_num):
+def load_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
     fileGenerator = Path(target_dir_path, "train").glob("**/*.txt")
     start_num = 0
     train_node_arrays = [] 
@@ -178,7 +124,7 @@ def load_ast_features(target_dir_path, class_num):
         try:
             for target in open(str(f),"r").readlines():
                 label= int(str(f).split(os.path.sep)[-2])
-                node_array, label, graph, _ = get_input_features(target, label, start_num, class_num)
+                node_array, label, graph, _ = get_input_features(target, label, start_num, class_num, NODE_TYPE_NUM)
                 start_num += len(node_array)
                 train_node_arrays.extend(node_array)
                 train_labels.extend(label)
@@ -207,7 +153,7 @@ def load_ast_features(target_dir_path, class_num):
     
     return train_node_arrays, train_labels, test_node_arrays, test_labels, graphs
 
-def load_test_ast_features(target_dir_path, class_num):
+def load_test_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
     fileGenerator = Path(target_dir_path).glob("**/*.txt")
     start_num = 0
     test_node_arrays = []
@@ -219,7 +165,7 @@ def load_test_ast_features(target_dir_path, class_num):
         try:
             for target in open(str(f),"r").readlines():
                 label = int(str(f).split(os.path.sep)[-2])
-                node_array, label, graph, G = get_input_features(target, label, start_num, class_num)
+                node_array, label, graph, G = get_input_features(target, label, start_num, class_num, NODE_TYPE_NUM)
                 end_num = start_num + len(node_array)
                 positions.append(((start_num, end_num),str(f),G))
                 start_num = end_num
@@ -312,7 +258,7 @@ def analyze_ast(ast_string,name):
         G.edge(str(i),str(j))
     for i in range(len(s_na)):
         G.node(str(i), str(s_na[i].index(1)) ,color="blue")
-        #G.node(str(i), ruleNames[s_na[i].index(1)],color="blue")
+        #G.node(str(i), ruleNames_C[s_na[i].index(1)],color="blue")
     G.render("tree/" + name)
     print(s_parent_na)
     return G
