@@ -85,7 +85,6 @@ class Model(object):
 class MLP(Model):
     def __init__(self, placeholders, input_dim, **kwargs):
         super(MLP, self).__init__(**kwargs)
-
         self.inputs = placeholders['features']
         self.input_dim = input_dim
         # self.input_dim = self.inputs.get_shape().as_list()[1]  # To be supported in future Tensorflow versions

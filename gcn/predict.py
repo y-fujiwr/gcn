@@ -19,6 +19,7 @@ tf.set_random_seed(seed)
 INPUT_DIM = 201
 #C:201
 #java:84
+topK = 5
 
 # Settings
 flags = tf.app.flags
@@ -87,6 +88,10 @@ model = model_func(placeholders, input_dim=INPUT_DIM, output_dim=FLAGS.class_num
 
 feed_dict = construct_test_feed_dict(features, support, placeholders)
 predicts = model.predict(model_load_dir=os.path.join("model", FLAGS.model_name), feed_dict=feed_dict)
+df_top1 = []
+df_top3 = []
+df_top5 = []
+df_top10 = []
 df = []
 log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+".txt"])
 if FLAGS.mode == "test":
@@ -94,18 +99,30 @@ if FLAGS.mode == "test":
 os.makedirs("log/{}".format(FLAGS.dataset),exist_ok=True)
 os.chmod("log/{}".format(FLAGS.dataset),0o777)
 with open(log_name,"w") as w:
+    recall_log = open("log/{}/recall.csv".format(FLAGS.dataset),"a")
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
+        sum_all_predict = np.sum(predicts[pair[0]:pair[1]], axis=0)
         result = pd.Series(predict).value_counts(normalize=True)
         result_label = result.index.values[0]
+        result_top1 = np.argsort(sum_all_predict)[::-1][:1]
+        result_top3 = np.argsort(sum_all_predict)[::-1][:3]
+        result_top5 = np.argsort(sum_all_predict)[::-1][:5]
+        result_top10 = np.argsort(sum_all_predict)[::-1][:10]
+
         answer = labels[pair[0]:pair[1]].argmax(axis=1)[0]
-    
+
         w.write(filename + "\n")
         w.write("Answer:{}\nResult:".format(answer))
-        w.write(str(result)+"\n")
+        def normalize(x):
+            return x/len(predict)
+        w.write(str(pd.Series(sum_all_predict).sort_values(ascending=False).map(normalize))+"\n")
         w.write(str(answer == result_label)+"\n")
         
-        df.append([filename,answer,result_label])
+        df_top1.append([filename,answer,result_top1])
+        df_top3.append([filename,answer,result_top3])
+        df_top5.append([filename,answer,result_top5])
+        df_top10.append([filename,answer,result_top10])
 
         x = (predict == labels[pair[0]:pair[1]].argmax(axis=1))
         for i in range(len(predict)):
@@ -114,11 +131,24 @@ with open(log_name,"w") as w:
             else:
                 G.node(str(i),str(predict[i]),color="blue")
         #G.render("tree/" + filename)
-    result_table = pd.DataFrame(df,columns=["filename","label","predict"])
-    fp = result_table[result_table["label"] != result_table["predict"]]
-    w.write("\nRecall:{}".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
-with open("log/{}/recall.csv".format(FLAGS.dataset),"a") as w:
-    w.write("{}\n".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
+    result_table1 = pd.DataFrame(df_top1,columns=["filename","label","predict"])
+    result_table3 = pd.DataFrame(df_top3,columns=["filename","label","predict"])
+    result_table5 = pd.DataFrame(df_top5,columns=["filename","label","predict"])
+    result_table10 = pd.DataFrame(df_top10,columns=["filename","label","predict"])
+    df.append(result_table1)
+    df.append(result_table3)
+    df.append(result_table5)
+    df.append(result_table10)
+    
+    for result_table in df:
+        fp = pd.DataFrame(columns=["filename","label","predict"])
+        for _, item in result_table.iterrows():
+            if item["label"] not in item["predict"]:
+                fp = fp.append(item)
+        w.write("\nRecall:{}".format(( len(result_table) - len(fp) ) / len(result_table) ) )
+        recall_log.write("{},".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
+    recall_log.write("\n")
+
 print(fp["label"].value_counts().index.values)
 #print(pd.Series(np.sum(labels,axis=0)))
 

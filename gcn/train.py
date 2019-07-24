@@ -133,6 +133,10 @@ for epoch in range(FLAGS.epochs):
     if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
         print("Early stopping...")
         break
+    
+    if outs[2] >= 0.77:
+        print("Early stopping...")
+        break
     """
 
 print("Optimization Finished!")
