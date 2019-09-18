@@ -40,7 +40,8 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
-flags.DEFINE_integer('input_dim', 201, 'Dimension of input vectors. Java:84, C:201')
+flags.DEFINE_integer('input_dim', 201, 'Dimension of input vectors. Java:85, C:201')
+flags.DEFINE_string('learning_type','method','Select learning mode (reinforcement, node, method).')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -80,64 +81,67 @@ placeholders = {
     'dropout': tf.placeholder_with_default(0., shape=()),
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
-# Create model
-model = model_func(placeholders, input_dim=features[2][1], logging=True)
+train_acc = 0
+while train_acc < 0.5:
+    # Create model
+    model = model_func(placeholders, input_dim=features[2][1], logging=True)
 
-# Initialize session
-sess = tf.Session()
-
-
-# Define model evaluation function
-def evaluate(features, support, labels, mask, placeholders):
-    t_test = time.time()
-    feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
-    outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
-    return outs_val[0], outs_val[1], (time.time() - t_test)
+    # Initialize session
+    sess = tf.Session()
 
 
-# Init variables
-sess.run(tf.global_variables_initializer())
+    # Define model evaluation function
+    def evaluate(features, support, labels, mask, placeholders):
+        t_test = time.time()
+        feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
+        outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
+        return outs_val[0], outs_val[1], (time.time() - t_test)
 
-cost_val = []
-try:
-    os.makedirs("model",True)
-    os.chmod("model",0o777)
-    os.makedirs(os.path.join(*["model", FLAGS.model_name]), True)
-    os.chmod(os.path.join(*["model", FLAGS.model_name]), 0o777)
-except FileExistsError:
-    pass
-try:
-    os.makedirs("log/{}".format(FLAGS.dataset), True)
-    os.chmod("log/{}".format(FLAGS.dataset), 0o777)
-except FileExistsError:
-    pass
-saver = tf.train.Saver()
-# Train model
-for epoch in range(FLAGS.epochs):
 
-    t = time.time()
-    # Construct feed dictionary
-    feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
-    feed_dict.update({placeholders['dropout']: FLAGS.dropout})
-    # Training step
-    outs = sess.run([model.opt_op, model.loss, model.accuracy, model.outputs], feed_dict=feed_dict)
-    # Validation
-    cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
-    cost_val.append(cost)
+    # Init variables
+    sess.run(tf.global_variables_initializer())
 
-    # Print results
-    print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
-          "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
-          "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
-    """
-    if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
-        print("Early stopping...")
-        break
+    cost_val = []
+    try:
+        os.makedirs("model",True)
+        os.chmod("model",0o777)
+        os.makedirs(os.path.join(*["model", FLAGS.model_name]), True)
+        os.chmod(os.path.join(*["model", FLAGS.model_name]), 0o777)
+    except FileExistsError:
+        pass
+    try:
+        os.makedirs("log/{}".format(FLAGS.dataset), True)
+        os.chmod("log/{}".format(FLAGS.dataset), 0o777)
+    except FileExistsError:
+        pass
+    saver = tf.train.Saver()
+    # Train model
+    for epoch in range(FLAGS.epochs):
+
+        t = time.time()
+        # Construct feed dictionary
+        feed_dict = construct_feed_dict(features, support, y_train, train_mask, placeholders)
+        feed_dict.update({placeholders['dropout']: FLAGS.dropout})
+        # Training step
+        outs = sess.run([model.opt_op, model.loss, model.accuracy, model.outputs], feed_dict=feed_dict)
+        # Validation
+        cost, acc, duration = evaluate(features, support, y_val, val_mask, placeholders)
+        cost_val.append(cost)
+
+        # Print results
+        print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
+            "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
+            "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
+        """
+        if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
+            print("Early stopping...")
+            break
     
-    if outs[2] >= 0.77:
-        print("Early stopping...")
-        break
-    """
+        if outs[2] >= 0.77:
+            print("Early stopping...")
+            break
+        """
+        train_acc = outs[2]
 
 print("Optimization Finished!")
 saver.save(sess, os.path.join(*["model", FLAGS.model_name, FLAGS.model_name]))
@@ -151,6 +155,3 @@ with open(os.path.join(*["log",FLAGS.dataset,"result.csv"]),"a") as r :
     r.write("{},{},{},{}\n".format(str(sys.argv[1:]).replace(",","_"),test_cost,test_acc,test_duration))
 
 line_notify("{}'s learning finished!\naccuracy:{}".format(FLAGS.model_name,test_acc))
-if test_acc >=0.8:
-    line_notify(str(pd.Series(np.sum(labels,axis=0))))
-

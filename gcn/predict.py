@@ -16,9 +16,6 @@ from models import GCN, MLP
 seed = 123
 np.random.seed(seed)
 tf.set_random_seed(seed)
-INPUT_DIM = 201
-#C:201
-#java:84
 topK = 5
 
 # Settings
@@ -27,7 +24,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 1000, 'Number of epochs to train.')
+flags.DEFINE_integer('epochs', 2000, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 256, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
@@ -38,7 +35,7 @@ flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_string('mode', 'test', 'Mode of predict (val or test).')
 flags.DEFINE_string('input', None, 'Test dataset string')
-flags.DEFINE_integer('input_dim',201,'Dimension of input vectors. Java:84, C:201')
+flags.DEFINE_integer('input_dim',201,'Dimension of input vectors. Java:85, C:201')
 FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -84,7 +81,7 @@ placeholders = {
 }
 
 # Create model
-model = model_func(placeholders, input_dim=INPUT_DIM, output_dim=FLAGS.class_num, logging=True)
+model = model_func(placeholders, input_dim=FLAGS.input_dim, output_dim=FLAGS.class_num, logging=True)
 
 feed_dict = construct_test_feed_dict(features, support, placeholders)
 predicts = model.predict(model_load_dir=os.path.join("model", FLAGS.model_name), feed_dict=feed_dict)
@@ -93,13 +90,14 @@ df_top3 = []
 df_top5 = []
 df_top10 = []
 df = []
+recalls = []
 log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+".txt"])
 if FLAGS.mode == "test":
     log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+",test.txt"])
 os.makedirs("log/{}".format(FLAGS.dataset),exist_ok=True)
 os.chmod("log/{}".format(FLAGS.dataset),0o777)
 with open(log_name,"w") as w:
-    recall_log = open("log/{}/recall.csv".format(FLAGS.dataset),"a")
+    recall_log = open("log/{}/recall_{}.csv".format(FLAGS.dataset,FLAGS.mode),"a")
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
         sum_all_predict = np.sum(predicts[pair[0]:pair[1]], axis=0)
@@ -145,17 +143,28 @@ with open(log_name,"w") as w:
         for _, item in result_table.iterrows():
             if item["label"] not in item["predict"]:
                 fp = fp.append(item)
-        w.write("\nRecall:{}".format(( len(result_table) - len(fp) ) / len(result_table) ) )
-        recall_log.write("{},".format( ( len(result_table) - len(fp) ) / len(result_table) ) )
+        recall = ( len(result_table) - len(fp) ) / len(result_table)
+        recalls.append(recall)
+        w.write("\nRecall:{}".format(recall) )
+        recall_log.write("{},".format(recall) )
     recall_log.write("\n")
 
-print(fp["label"].value_counts().index.values)
 #print(pd.Series(np.sum(labels,axis=0)))
-
+print(list(fp["label"].value_counts().index.values))
 if FLAGS.mode == "test":
     exit()
-
-target = fp["label"].value_counts().index.values
+if recalls[0] <=0.2:
+    exit()
+target = []
+if os.path.exists('data/{}/addition.pkl'.format(FLAGS.dataset)):
+    with open('data/{}/addition.pkl'.format(FLAGS.dataset),'rb') as f:
+        target = pickle.load(f)
+        target.append(list(fp["label"].value_counts().index.values))
+else:
+    target.append(list(fp["label"].value_counts().index.values))
+with open('data/{}/addition.pkl'.format(FLAGS.dataset),'wb') as f:
+    pickle.dump(target, f)
+"""
 i = 1
 while True:
     additional_dataset_dir = "data/{}/train/copy{}".format(FLAGS.dataset,i)
@@ -166,7 +175,6 @@ while True:
 os.makedirs(additional_dataset_dir,True)
 os.chmod(additional_dataset_dir,0o777)
 for t in target:
-    if t not in [1,3,6,8]:
-        shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
-
+    shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
+"""
         
