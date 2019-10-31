@@ -31,7 +31,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 2000, 'Number of epochs to train.')
+flags.DEFINE_integer('epochs', 2500, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 256, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
@@ -42,7 +42,7 @@ flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_integer('input_dim', 201, 'Dimension of input vectors. Java:85, C:201')
 flags.DEFINE_string('learning_type','method','Select learning mode (reinforcement, node, method).')
-FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
+FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
     FLAGS.model,
@@ -50,7 +50,8 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.hidden1,
     FLAGS.dropout,
     FLAGS.weight_decay,
-    FLAGS.layers
+    FLAGS.layers,
+    FLAGS.learning_type
 )
 
 # Load data

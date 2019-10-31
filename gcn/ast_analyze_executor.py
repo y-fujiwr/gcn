@@ -48,10 +48,9 @@ def get_input_features(ast_string, label, start_num, class_num, NODE_TYPE_NUM):
             pointer = parent_node_array[pointer]
             if pointer == -1:
                 terminal_flag = True
-            
     if(pointer != -1):
-        print("error!!")
-        return None
+        print("parse warning!!")
+        #return None
     stack = [-1]
     leaf = len(parent_node_array) - 1
     for x in range(len(parent_node_array)-1, 0, -1):

@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import shutil
 import h5py
+from itertools import product
 
 from utils import *
 from models import GCN, MLP
@@ -36,7 +37,8 @@ flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_string('mode', 'test', 'Mode of predict (val or test).')
 flags.DEFINE_string('input', None, 'Test dataset string')
 flags.DEFINE_integer('input_dim',201,'Dimension of input vectors. Java:85, C:201')
-FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
+flags.DEFINE_string('learning_type','method','Select learning mode (reinforcement, node, method).')
+FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
     FLAGS.model,
@@ -44,7 +46,8 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{}".format(
     FLAGS.hidden1,
     FLAGS.dropout,
     FLAGS.weight_decay,
-    FLAGS.layers
+    FLAGS.layers,
+    FLAGS.learning_type
 )
 if FLAGS.input == None:
     FLAGS.input = FLAGS.dataset
@@ -97,7 +100,7 @@ if FLAGS.mode == "test":
 os.makedirs("log/{}".format(FLAGS.dataset),exist_ok=True)
 os.chmod("log/{}".format(FLAGS.dataset),0o777)
 with open(log_name,"w") as w:
-    recall_log = open("log/{}/recall_{}.csv".format(FLAGS.dataset,FLAGS.mode),"a")
+    recall_log = open("log/{}/recall_{}_{}.csv".format(FLAGS.dataset,FLAGS.mode,FLAGS.learning_type),"a")
     for pair, filename, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
         sum_all_predict = np.sum(predicts[pair[0]:pair[1]], axis=0)
@@ -134,10 +137,11 @@ with open(log_name,"w") as w:
     result_table5 = pd.DataFrame(df_top5,columns=["filename","label","predict"])
     result_table10 = pd.DataFrame(df_top10,columns=["filename","label","predict"])
     df.append(result_table1)
-    df.append(result_table3)
-    df.append(result_table5)
-    df.append(result_table10)
-    
+    #df.append(result_table3)
+    #df.append(result_table5)
+    #df.append(result_table10)
+    print(df)
+
     for result_table in df:
         fp = pd.DataFrame(columns=["filename","label","predict"])
         for _, item in result_table.iterrows():
@@ -147,6 +151,28 @@ with open(log_name,"w") as w:
         recalls.append(recall)
         w.write("\nRecall:{}".format(recall) )
         recall_log.write("{},".format(recall) )
+
+    counter1 = 0
+    counter2 = 0
+    num = 0
+    t = 0
+    for _, item1 in result_table1.iterrows():
+        counter1 += 1
+        for _, item2 in result_table1.iterrows():
+            counter2 += 1
+            if counter1 > counter2:
+                continue
+            if item1["filename"] == item2["filename"]:
+                num += 1
+                if item1["predict"] == item2["predict"]:
+                    t += 1
+        counter2 = 0
+    print(t/num)
+    print(t)
+    print(num)
+    result_table1.to_csv("testest.csv")
+
+
     recall_log.write("\n")
 
 #print(pd.Series(np.sum(labels,axis=0)))
