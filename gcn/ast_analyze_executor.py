@@ -157,18 +157,21 @@ def load_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
                 node_dict[i] = int(20000000 / class_num / n)
             filelist = []
             for d in range(class_num):
-                temp = list(Path(target_dir_path, "train/{}".format(d)).glob("**/*.txt"))
+                temp = list(Path(target_dir_path, f"train/{d}").glob("**/*.txt"))
                 while len(temp) < node_dict[d]:
                     temp.extend(temp)
                 sampled = random.sample(temp,node_dict[d])
                 filelist.extend(sampled)
-        else:
+        elif FLAGS.learning_type in ["method","reinforcement"]:
             for d in dirIterator:
                 temp = list(Path(d).glob("**/*.txt"))
-                while len(temp) < 100:
+                while len(temp) < first:
                     temp.extend(temp)
-                sampled = random.sample(temp,100)
+                sampled = random.sample(temp,first)
                 filelist.extend(sampled)
+        else:
+            for d in dirIterator:
+                filelist.extend(list(Path(d).glob("**/*.txt")))
 
     if FLAGS.learning_type == "reinforcement":
         if os.path.exists('data/{}/addition.pkl'.format(FLAGS.dataset)):
@@ -240,12 +243,14 @@ def load_test_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
         traindatapkl = str(Path(target_dir_path,dataname))
         fileGenerator = pickle.load(open(traindatapkl,"rb"))
     for f in tqdm(fileGenerator):
+        line_num = -1
         try:
             for target in open(str(f),"r").readlines():
+                line_num += 1
                 label = int(str(f).split(os.path.sep)[-2])
                 node_array, label, graph, G = get_input_features(target, label, start_num, class_num, NODE_TYPE_NUM)
                 end_num = start_num + len(node_array)
-                positions.append(((start_num, end_num),str(f),G))
+                positions.append(((start_num, end_num),str(f),line_num,G))
                 start_num = end_num
                 test_node_arrays.extend(node_array)
                 test_labels.extend(label)

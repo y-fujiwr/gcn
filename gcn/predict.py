@@ -9,6 +9,9 @@ import pandas as pd
 import shutil
 import h5py
 from itertools import product
+from pathlib import Path
+import textdistance
+from distance import levenshtein
 
 from utils import *
 from models import GCN, MLP
@@ -25,7 +28,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
-flags.DEFINE_integer('epochs', 2000, 'Number of epochs to train.')
+flags.DEFINE_integer('epochs', 2500, 'Number of epochs to train.')
 flags.DEFINE_integer('hidden1', 256, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
@@ -37,25 +40,31 @@ flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_string('mode', 'test', 'Mode of predict (val or test).')
 flags.DEFINE_string('input', None, 'Test dataset string')
 flags.DEFINE_integer('input_dim',201,'Dimension of input vectors. Java:85, C:201')
-flags.DEFINE_string('learning_type','method','Select learning mode (reinforcement, node, method).')
-FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
-    FLAGS.model_name,
-    FLAGS.dataset,
-    FLAGS.model,
-    FLAGS.learning_rate,
-    FLAGS.hidden1,
-    FLAGS.dropout,
-    FLAGS.weight_decay,
-    FLAGS.layers,
-    FLAGS.learning_type
-)
+flags.DEFINE_string('learning_type','raw','Select learning mode (reinforcement, node, method).')
+flags.DEFINE_string('model_file_name', None, 'Test dataset string')
+
+if FLAGS.model_file_name == None:
+    FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
+        FLAGS.model_name,
+        FLAGS.dataset,
+        FLAGS.model,
+        FLAGS.learning_rate,
+        FLAGS.hidden1,
+        FLAGS.dropout,
+        FLAGS.weight_decay,
+        FLAGS.layers,
+        FLAGS.learning_type
+    )
+else:
+    FLAGS.model_name = FLAGS.model_file_name
+
 if FLAGS.input == None:
     FLAGS.input = FLAGS.dataset
 # Load data
 if FLAGS.mode == 'val':
     adj, features, testdata, labels, positions = load_test_data("data/{}/train".format(FLAGS.dataset), FLAGS.class_num, FLAGS.input_dim)
 else:
-    adj, features, testdata, labels, positions = load_test_data("data/{}/test".format(FLAGS.input), FLAGS.class_num, FLAGS.input_dim)
+    adj, features, testdata, labels, positions = load_test_data("data/{}/{}".format(FLAGS.input,FLAGS.mode), FLAGS.class_num, FLAGS.input_dim)
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -92,6 +101,7 @@ df_top1 = []
 df_top3 = []
 df_top5 = []
 df_top10 = []
+df_all=[]
 df = []
 recalls = []
 log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+".txt"])
@@ -101,30 +111,38 @@ os.makedirs("log/{}".format(FLAGS.dataset),exist_ok=True)
 os.chmod("log/{}".format(FLAGS.dataset),0o777)
 with open(log_name,"w") as w:
     recall_log = open("log/{}/recall_{}_{}.csv".format(FLAGS.dataset,FLAGS.mode,FLAGS.learning_type),"a")
-    for pair, filename, G in positions:
+    for pair, filename,line_num, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
         sum_all_predict = np.sum(predicts[pair[0]:pair[1]], axis=0)
         result = pd.Series(predict).value_counts(normalize=True)
         result_label = result.index.values[0]
+
+        # can calculate levenshtein similarity score
+        input_ast_string = open(filename,"r").readlines()[line_num].split(" ")
+        output_ast_string = open(list(Path(f"data/{FLAGS.dataset}/test/{result_label}").glob("**/*.txt"))[0]).readlines()[0].split(" ")
+        sim_levenshtein = 1# - textdistance.hamming.distance(output_ast_string,input_ast_string)/max(len(input_ast_string),len(output_ast_string))
+        
+        #ranking setup
         result_top1 = np.argsort(sum_all_predict)[::-1][:1]
         result_top3 = np.argsort(sum_all_predict)[::-1][:3]
         result_top5 = np.argsort(sum_all_predict)[::-1][:5]
         result_top10 = np.argsort(sum_all_predict)[::-1][:10]
-
         answer = labels[pair[0]:pair[1]].argmax(axis=1)[0]
 
         w.write(filename + "\n")
-        w.write("Answer:{}\nResult:".format(answer))
+        w.write(f"Answer:{answer}\nResult:")
         def normalize(x):
             return x/len(predict)
-        w.write(str(pd.Series(sum_all_predict).sort_values(ascending=False).map(normalize))+"\n")
+        rank = result#pd.Series(sum_all_predict).sort_values(ascending=False).map(normalize)
+        w.write(str(rank)+"\n")
         w.write(str(answer == result_label)+"\n")
-        
-        df_top1.append([filename,answer,result_top1])
-        df_top3.append([filename,answer,result_top3])
-        df_top5.append([filename,answer,result_top5])
-        df_top10.append([filename,answer,result_top10])
+        df_top1.append([filename,line_num,answer,result.index.values[:1],rank.iloc[0],sim_levenshtein])
+        df_top3.append([filename,line_num,answer,result.index.values[:3],rank,sim_levenshtein])
+        df_top5.append([filename,line_num,answer,result.index.values[:5],rank,sim_levenshtein])
+        #df_top10.append([filename,answer,result_top10])
+        df_all.append([filename,line_num,answer,result.index.values,rank,sim_levenshtein])
 
+        #paint red or blue at AST
         x = (predict == labels[pair[0]:pair[1]].argmax(axis=1))
         for i in range(len(predict)):
             if x[i] == False:
@@ -132,26 +150,37 @@ with open(log_name,"w") as w:
             else:
                 G.node(str(i),str(predict[i]),color="blue")
         #G.render("tree/" + filename)
-    result_table1 = pd.DataFrame(df_top1,columns=["filename","label","predict"])
-    result_table3 = pd.DataFrame(df_top3,columns=["filename","label","predict"])
-    result_table5 = pd.DataFrame(df_top5,columns=["filename","label","predict"])
-    result_table10 = pd.DataFrame(df_top10,columns=["filename","label","predict"])
-    df.append(result_table1)
-    #df.append(result_table3)
-    #df.append(result_table5)
-    #df.append(result_table10)
-    print(df)
+    result_table1 = pd.DataFrame(df_top1,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
+    result_table_all = pd.DataFrame(df_all,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
+    result_table3 = pd.DataFrame(df_top3,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
+    result_table5 = pd.DataFrame(df_top5,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
+    #result_table10 = pd.DataFrame(df_top10,columns=["filename","label","predict"])
+    res = result_table1["predict_score"].corr(result_table1["sim_levenshtein"])
+    print(res)
 
+    df.append(result_table1)
+    df.append(result_table3)
+    df.append(result_table5)
+    df.append(result_table_all)
+    #df.append(result_table10)
+    result_table_all.to_csv("log/{}/{}_{}_result_table.csv".format(FLAGS.dataset,FLAGS.model_name,FLAGS.mode))
+
+    #check false positive and true positive
     for result_table in df:
-        fp = pd.DataFrame(columns=["filename","label","predict"])
+        fp = pd.DataFrame(columns=["filename","label","predict","predict_score","sim_levenshtein"])
+        tp = pd.DataFrame(columns=["filename","label","predict","predict_score","sim_levenshtein"])
         for _, item in result_table.iterrows():
             if item["label"] not in item["predict"]:
                 fp = fp.append(item)
+            else:
+                tp = tp.append(item)
         recall = ( len(result_table) - len(fp) ) / len(result_table)
         recalls.append(recall)
         w.write("\nRecall:{}".format(recall) )
         recall_log.write("{},".format(recall) )
 
+    #calculate score_S in journal
+    """
     counter1 = 0
     counter2 = 0
     num = 0
@@ -160,7 +189,7 @@ with open(log_name,"w") as w:
         counter1 += 1
         for _, item2 in result_table1.iterrows():
             counter2 += 1
-            if counter1 > counter2:
+            if counter1 >= counter2:
                 continue
             if item1["filename"] == item2["filename"]:
                 num += 1
@@ -170,24 +199,26 @@ with open(log_name,"w") as w:
     print(t/num)
     print(t)
     print(num)
-    result_table1.to_csv("testest.csv")
-
-
+    """
     recall_log.write("\n")
 
 #print(pd.Series(np.sum(labels,axis=0)))
 print(list(fp["label"].value_counts().index.values))
+print(list(tp["label"].value_counts().index.values))
+print(list(range(43)))
+add = list(set(list(range(43)))-set(list(tp["label"].value_counts().index.values)))
+print(add)
 if FLAGS.mode == "test":
     exit()
-if recalls[0] <=0.2:
+if recalls[0] <=0.01:
     exit()
 target = []
 if os.path.exists('data/{}/addition.pkl'.format(FLAGS.dataset)):
     with open('data/{}/addition.pkl'.format(FLAGS.dataset),'rb') as f:
         target = pickle.load(f)
-        target.append(list(fp["label"].value_counts().index.values))
+        target.append(add)
 else:
-    target.append(list(fp["label"].value_counts().index.values))
+    target.append(add)
 with open('data/{}/addition.pkl'.format(FLAGS.dataset),'wb') as f:
     pickle.dump(target, f)
 """

@@ -41,7 +41,7 @@ flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_integer('input_dim', 201, 'Dimension of input vectors. Java:85, C:201')
-flags.DEFINE_string('learning_type','method','Select learning mode (reinforcement, node, method).')
+flags.DEFINE_string('learning_type','raw','Select learning mode (reinforcement, node, method).')
 FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -83,7 +83,7 @@ placeholders = {
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 train_acc = 0
-while train_acc < 0.5:
+while train_acc < 0.01:
     # Create model
     model = model_func(placeholders, input_dim=features[2][1], logging=True)
 
