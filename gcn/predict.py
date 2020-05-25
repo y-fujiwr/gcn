@@ -29,7 +29,7 @@ flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 2500, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 256, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('hidden1', 128, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
@@ -39,8 +39,10 @@ flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
 flags.DEFINE_string('mode', 'test', 'Mode of predict (val or test).')
 flags.DEFINE_string('input', None, 'Test dataset string')
-flags.DEFINE_integer('input_dim',201,'Dimension of input vectors. Java:85, C:201')
+flags.DEFINE_string('language', "java", 'Programming Language. java, c')
 flags.DEFINE_string('learning_type','raw','Select learning mode (reinforcement, node, method).')
+flags.DEFINE_boolean('normalize', False, 'Select whether normalizing identifier or not.')
+flags.DEFINE_integer('lsi', None, 'Set dimension of LSI (None means BoW)')
 flags.DEFINE_string('model_file_name', None, 'Test dataset string')
 
 if FLAGS.model_file_name == None:
@@ -60,11 +62,22 @@ else:
 
 if FLAGS.input == None:
     FLAGS.input = FLAGS.dataset
+
+# Calculate input vector dimension
+vector_dimension = 0
+if FLAGS.language == "java":
+    vector_dimension = 85
+elif FLAGS.language == "c":
+    vector_dimension = 201
+dictionary_filepath = f"data/{FLAGS.dataset}/dictionary.txt"
+if os.path.exists(dictionary_filepath) and FLAGS.normalize == False:
+    vector_dimension += len(open(dictionary_filepath).readlines()) + 1
+
 # Load data
 if FLAGS.mode == 'val':
-    adj, features, testdata, labels, positions = load_test_data("data/{}/train".format(FLAGS.dataset), FLAGS.class_num, FLAGS.input_dim)
+    adj, features, testdata, labels, positions = load_test_data("data/{}/train".format(FLAGS.dataset), FLAGS.class_num, vector_dimension)
 else:
-    adj, features, testdata, labels, positions = load_test_data("data/{}/{}".format(FLAGS.input,FLAGS.mode), FLAGS.class_num, FLAGS.input_dim)
+    adj, features, testdata, labels, positions = load_test_data("data/{}/{}".format(FLAGS.input,FLAGS.mode), FLAGS.class_num, vector_dimension)
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -92,8 +105,11 @@ placeholders = {
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 
+print("The number of node")
+print(labels.sum(axis=0))
+
 # Create model
-model = model_func(placeholders, input_dim=FLAGS.input_dim, output_dim=FLAGS.class_num, logging=True)
+model = model_func(placeholders, input_dim=features[2][1], output_dim=FLAGS.class_num, logging=True)
 
 feed_dict = construct_test_feed_dict(features, support, placeholders)
 predicts = model.predict(model_load_dir=os.path.join("model", FLAGS.model_name), feed_dict=feed_dict)
@@ -104,13 +120,12 @@ df_top10 = []
 df_all=[]
 df = []
 recalls = []
-log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+".txt"])
-if FLAGS.mode == "test":
-    log_name = os.path.join(*["log",FLAGS.dataset,FLAGS.model_name+",test.txt"])
+log_name = os.path.join(*["log",FLAGS.dataset,f"{FLAGS.model_name}_{FLAGS.mode}.txt"])
 os.makedirs("log/{}".format(FLAGS.dataset),exist_ok=True)
 os.chmod("log/{}".format(FLAGS.dataset),0o777)
 with open(log_name,"w") as w:
     recall_log = open("log/{}/recall_{}_{}.csv".format(FLAGS.dataset,FLAGS.mode,FLAGS.learning_type),"a")
+    recall_log.write(f"{FLAGS.model_name},")
     for pair, filename,line_num, G in positions:
         predict = predicts[pair[0]:pair[1]].argmax(axis=1)
         sum_all_predict = np.sum(predicts[pair[0]:pair[1]], axis=0)
@@ -139,7 +154,7 @@ with open(log_name,"w") as w:
         df_top1.append([filename,line_num,answer,result.index.values[:1],rank.iloc[0],sim_levenshtein])
         df_top3.append([filename,line_num,answer,result.index.values[:3],rank,sim_levenshtein])
         df_top5.append([filename,line_num,answer,result.index.values[:5],rank,sim_levenshtein])
-        #df_top10.append([filename,answer,result_top10])
+        df_top10.append([filename,line_num,answer,result.index.values[:10],rank,sim_levenshtein])
         df_all.append([filename,line_num,answer,result.index.values,rank,sim_levenshtein])
 
         #paint red or blue at AST
@@ -154,16 +169,18 @@ with open(log_name,"w") as w:
     result_table_all = pd.DataFrame(df_all,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
     result_table3 = pd.DataFrame(df_top3,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
     result_table5 = pd.DataFrame(df_top5,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
-    #result_table10 = pd.DataFrame(df_top10,columns=["filename","label","predict"])
-    res = result_table1["predict_score"].corr(result_table1["sim_levenshtein"])
-    print(res)
+    result_table10 = pd.DataFrame(df_top10,columns=["filename","line","label","predict","predict_score","sim_levenshtein"])
+    #res = result_table1["predict_score"].corr(result_table1["sim_levenshtein"])
+    #print(res)
 
     df.append(result_table1)
-    df.append(result_table3)
-    df.append(result_table5)
-    df.append(result_table_all)
-    #df.append(result_table10)
-    result_table_all.to_csv("log/{}/{}_{}_result_table.csv".format(FLAGS.dataset,FLAGS.model_name,FLAGS.mode))
+    if FLAGS.mode != "val":
+        df.append(result_table3)
+        df.append(result_table5)
+        df.append(result_table10)
+        df.append(result_table_all)
+        
+    #result_table_all.to_csv("log/{}/{}_{}_result_table.csv".format(FLAGS.dataset,FLAGS.model_name,FLAGS.mode))
 
     #check false positive and true positive
     for result_table in df:
@@ -205,10 +222,10 @@ with open(log_name,"w") as w:
 #print(pd.Series(np.sum(labels,axis=0)))
 print(list(fp["label"].value_counts().index.values))
 print(list(tp["label"].value_counts().index.values))
-print(list(range(43)))
-add = list(set(list(range(43)))-set(list(tp["label"].value_counts().index.values)))
+print(list(range(FLAGS.class_num)))
+add = list(set(list(range(FLAGS.class_num)))-set(list(tp["label"].value_counts().index.values)))
 print(add)
-if FLAGS.mode == "test":
+if FLAGS.mode != "val":
     exit()
 if recalls[0] <=0.01:
     exit()
@@ -221,17 +238,3 @@ else:
     target.append(add)
 with open('data/{}/addition.pkl'.format(FLAGS.dataset),'wb') as f:
     pickle.dump(target, f)
-"""
-i = 1
-while True:
-    additional_dataset_dir = "data/{}/train/copy{}".format(FLAGS.dataset,i)
-    if os.path.exists(additional_dataset_dir):
-        i+=1
-    else:
-        break
-os.makedirs(additional_dataset_dir,True)
-os.chmod(additional_dataset_dir,0o777)
-for t in target:
-    shutil.copytree("data/{}/train/{}".format(FLAGS.dataset,t),additional_dataset_dir+"/{}".format(t))
-"""
-        

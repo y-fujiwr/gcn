@@ -67,19 +67,6 @@ def load_data(dataset_str, class_num, NODE_TYPE_NUM):
     """
     test_idx_range = np.array(range(len(allx.getnnz(axis=1)), len(allx.getnnz(axis=1)) + len(tx.getnnz(axis=1))), dtype=np.int32)
     
-    """
-    if dataset_str == 'citeseer':
-        # Fix citeseer dataset (there are some isolated nodes in the graph)
-        # Find isolated nodes, add them as zero-vecs into the right position
-        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder)+1)
-        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
-        tx_extended[test_idx_range-min(test_idx_range), :] = tx
-        tx = tx_extended
-        ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
-        ty_extended[test_idx_range-min(test_idx_range), :] = ty
-        ty = ty_extended
-    """
-    
     features = sp.vstack((allx, tx)).tolil()
     #features[test_idx_reorder, :] = features[test_idx_range, :]
     adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
@@ -100,7 +87,7 @@ def load_data(dataset_str, class_num, NODE_TYPE_NUM):
     y_val[val_mask, :] = labels[val_mask, :]
     y_test[test_mask, :] = labels[test_mask, :]
 
-    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask
+    return adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, graph
 
 def load_test_data(dataset_str, class_num, NODE_TYPE_NUM):
     allt, yt, graph, positions = load_test_ast_features(dataset_str, class_num, NODE_TYPE_NUM)

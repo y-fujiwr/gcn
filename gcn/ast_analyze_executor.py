@@ -18,14 +18,45 @@ import tensorflow as tf
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
+use_lsi = None
+dictionary_lsi = None
+vectors_lsi = None
+dictionary_node = {}
+kind_node = 0
+invalid_keys = []
+
+def read_lsi(dim):
+    global dictionary_lsi
+    global vectors_lsi
+    global dictionary_node
+    global invalid_keys
+    with open(f"data/{FLAGS.dataset}/dictionary_lsi_{FLAGS.lsi}.pickle", "rb") as fi:
+        dictionary_lsi = pickle.load(fi)
+    vectors_lsi = np.load(f"data/{FLAGS.dataset}/vec_lsi_{FLAGS.lsi}.npy")
+    with open(f"data/{FLAGS.dataset}/dictionary.txt") as fi:
+        identifier_list = fi.read().splitlines()
+    for i in range(len(identifier_list)):
+        try:
+            dictionary_node[i+dim] = vectors_lsi[dictionary_lsi[identifier_list[i]]]
+        except KeyError:
+            invalid_keys.append(i+dim)
+            continue
 
 def get_input_features(ast_string, label, start_num, class_num, NODE_TYPE_NUM):
+    if ast_string == "(8 )":
+        print("aaaa")
     ast_stream = ast_string.split(" ")[:-1]
     node_array = []
     parent_node_array = []
     pointer = -1
     terminal_flag = False
-    #w2v = Word2Vec.load("model/node_w2v_128").wv
+    vector_dimension = 0
+    if FLAGS.language == "java":
+        vector_dimension = 85
+    elif FLAGS.language == "c":
+        vector_dimension = 201
+
+    #Translate AST stream to node_array and parent_node_array
     for node in ast_stream:
         if terminal_flag:
             node_array = []
@@ -33,24 +64,45 @@ def get_input_features(ast_string, label, start_num, class_num, NODE_TYPE_NUM):
             terminal_flag = False
         if(node[0]=="("):
             if(len(node) > 1):
-                temp = [0] * NODE_TYPE_NUM
-                temp[int(node[1:])] = 1
-                node_array.append(temp)
-                """
-                if node[1:] in w2v:
-                    node_array.append(w2v[node[1:]].tolist())
+                if use_lsi != None:
+                    if int(node[1:]) > kind_node:
+                        if int(node[1:]) not in invalid_keys:
+                            temp = [0] * kind_node
+                            temp = np.concatenate([temp,dictionary_node[int(node[1:])]])
+                        else:
+                            temp = [0] * (kind_node + len(vectors_lsi[0]))
+                            if FLAGS.language == "java":
+                                temp[42] = 1
+                            elif FLAGS.language == "c":
+                                temp[3] = 1
+                    else:
+                        temp = [0] * (kind_node + len(vectors_lsi[0]))
+                        temp[int(node[1:])] = 1
                 else:
-                    node_array.append([0]*128)
-                """
+                    if FLAGS.normalize:
+                        temp = [0] * vector_dimension
+                        if int(node[1:]) >= vector_dimension:
+                            if FLAGS.language == "java":
+                                temp[42] = 1
+                            elif FLAGS.language == "c":
+                                temp[3] = 1
+                        else:
+                            temp[int(node[1:])] = 1
+                    else:
+                        temp = [0] * NODE_TYPE_NUM
+                        temp[int(node[1:])] = 1
+                node_array.append(temp)
                 parent_node_array.append(pointer)
                 pointer = len(parent_node_array) - 1 
         else:
             pointer = parent_node_array[pointer]
             if pointer == -1:
                 terminal_flag = True
-    if(pointer != -1):
+    if(pointer != -1) and FLAGS.language == "java":
         print("parse warning!!")
         #return None
+
+    #Remove redundant nodes
     stack = [-1]
     leaf = len(parent_node_array) - 1
     for x in range(len(parent_node_array)-1, 0, -1):
@@ -72,53 +124,72 @@ def get_input_features(ast_string, label, start_num, class_num, NODE_TYPE_NUM):
                     parent_node_array[x] = -2
     parent_node_array[leaf] = 0
 
-    s_parent_na = []
-    s_na = []
+    short_parent_node_array = []
+    short_node_array = []
     for i in range(len(parent_node_array)):
         x = parent_node_array[i]
         if x != -2:
-            s_parent_na.append(x - len([n for n in parent_node_array[:x] if n == -2]))
-            s_na.append(node_array[i])
+            short_parent_node_array.append(x - len([n for n in parent_node_array[:x] if n == -2]))
+            short_node_array.append(node_array[i])
 
-    num_1 = s_parent_na.count(1)
+    num_1 = short_parent_node_array.count(1)
     if num_1 >= 3:
         for i in range(num_1-2):
-            s_parent_na.insert(3,2)
-            for j in range(4,len(s_parent_na)):
-                s_parent_na[j] += 1
-            for k in range(len(s_parent_na)-1,0,-1):
-                if s_parent_na[k] <= i+2:
-                    s_parent_na[k] -= 1
-                if s_parent_na[k] == i+1:
+            short_parent_node_array.insert(3,2)
+            for j in range(4,len(short_parent_node_array)):
+                short_parent_node_array[j] += 1
+            for k in range(len(short_parent_node_array)-1,0,-1):
+                if short_parent_node_array[k] <= i+2:
+                    short_parent_node_array[k] -= 1
+                if short_parent_node_array[k] == i+1:
                     break
-            temp = [0] * NODE_TYPE_NUM
+            if use_lsi != None:
+                temp = [0] * (kind_node + len(vectors_lsi[0]))
+            elif FLAGS.normalize:
+                temp = [0] * vector_dimension
+            else:
+                temp = [0] * NODE_TYPE_NUM
             temp[50] = 1
-            s_na.insert(3,temp)
-            #s_na.insert(3,w2v["50"].tolist())
+            short_node_array.insert(3,temp)
 
+    #Create a dictionary-type graph
     graph = defaultdict(list)
-    #node_array = lil_matrix(np.array(s_na, dtype=np.float32)).tocsr()
-    #adj_matrix = lil_matrix((len(s_na),len(s_na)))
+    """
+    #node_array = lil_matrix(np.array(short_node_array, dtype=np.float32)).tocsr()
+    #adj_matrix = lil_matrix((len(short_node_array),len(short_node_array)))
+    """
     G = Digraph(format="png")
     G.attr("node", shape ="circle")
     edges = []
-    for i in range(1,len(s_parent_na)):
-        #adj_matrix[i, s_parent_na[i]] = 1
-        #adj_matrix[s_parent_na[i], i] = 1
-        graph[i+start_num].append(s_parent_na[i]+start_num)
-        graph[s_parent_na[i]+start_num].append(i+start_num)
-        edges.append((s_parent_na[i],i))
+    for i in range(1,len(short_parent_node_array)):
+        """
+        #adj_matrix[i, short_parent_node_array[i]] = 1
+        #adj_matrix[short_parent_node_array[i], i] = 1
+        """
+        graph[i+start_num].append(short_parent_node_array[i]+start_num)
+        graph[short_parent_node_array[i]+start_num].append(i+start_num)
+        edges.append((short_parent_node_array[i],i))
     #adj_matrix = adj_matrix.tocsr()
     for i,j in edges:
         G.edge(str(i),str(j))
-    #for i in range(len(s_na)):
-        #G.node(str(i), str(s_na[i].index(1)))
-    labels = [[0] * class_num] * len(s_na)
+    #for i in range(len(short_node_array)):
+        #G.node(str(i), str(short_node_array[i].index(1)))
+    labels = [[0] * class_num] * len(short_node_array)
     labels[0][label] = 1
 
-    return s_na, labels, graph, G #,adj_matrix
+    return short_node_array, labels, graph, G #,adj_matrix
 
 def load_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
+    global kind_node
+    global use_lsi
+    use_lsi = FLAGS.lsi
+    if FLAGS.language == "java":
+        kind_node = 85
+    elif FLAGS.language == "c":
+        kind_node = 201
+    if use_lsi != None:
+        print("use lsi")
+        read_lsi(kind_node+1)
     tanni = 10
     first = 50
     print("load train data...")
@@ -147,14 +218,14 @@ def load_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
                         __, label, ___, _ = get_input_features(target, label, 0, class_num, NODE_TYPE_NUM)
                         train_labels.extend(label)
                 except IndexError:
-                    print(f)
+                    print(f"indexerror:{f}")
                 except TypeError:
-                    print(f)
+                    print(f"typeerror:{f}")
             train_labels = np.array(train_labels, dtype=np.int32)
             num_node = pd.Series(np.nonzero(train_labels)[1]).value_counts()
             node_dict = {}
             for i,n in num_node.iteritems():
-                node_dict[i] = int(20000000 / class_num / n)
+                node_dict[i] = int(40000000 / class_num / n)
             filelist = []
             for d in range(class_num):
                 temp = list(Path(target_dir_path, f"train/{d}").glob("**/*.txt"))
@@ -199,10 +270,15 @@ def load_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
                 train_node_arrays.extend(node_array)
                 train_labels.extend(label)
                 graphs.update(graph)
-        except IndexError:
-            print(f)
+                if len(graph) != len(node_array):
+                    print(len(graph))
+                    print(len(node_array))
+                    print(label)
+                    print(str(f))
+        #except IndexError:
+            #print(f"indexerror:{f}")
         except TypeError:
-            print(f)
+            print(f"typeerror:{f}")
     train_node_arrays = lil_matrix(np.array(train_node_arrays, dtype=np.float32)).tocsr()
     train_labels = np.array(train_labels, dtype=np.int32)
     
@@ -231,6 +307,16 @@ def load_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
     return train_node_arrays, train_labels, test_node_arrays, test_labels, graphs
 
 def load_test_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
+    global kind_node
+    global use_lsi
+    use_lsi = FLAGS.lsi
+    if FLAGS.language == "java":
+        kind_node = 85
+    elif FLAGS.language == "c":
+        kind_node = 201
+    if use_lsi != None:
+        print("use lsi")
+        read_lsi(kind_node+1)
     fileGenerator = Path(target_dir_path).glob("**/*.txt")
     start_num = 0
     test_node_arrays = []
@@ -249,6 +335,10 @@ def load_test_ast_features(target_dir_path, class_num, NODE_TYPE_NUM):
                 line_num += 1
                 label = int(str(f).split(os.path.sep)[-2])
                 node_array, label, graph, G = get_input_features(target, label, start_num, class_num, NODE_TYPE_NUM)
+                #print debug
+                if len(graph) == 0:
+                    print(str(f))
+                    exit()
                 end_num = start_num + len(node_array)
                 positions.append(((start_num, end_num),str(f),line_num,G))
                 start_num = end_num
@@ -308,42 +398,42 @@ def analyze_ast(ast_string,name,NODE_TYPE_NUM):
                 if x != leaf:
                     parent_node_array[x] = -2
     parent_node_array[leaf] = 0
-    s_parent_na = []
-    s_na = []
+    short_parent_node_array = []
+    short_node_array = []
     for i in range(len(parent_node_array)):
         x = parent_node_array[i]
         if x != -2:
-            s_parent_na.append(x - len([n for n in parent_node_array[:x] if n == -2]))
-            s_na.append(node_array[i])
+            short_parent_node_array.append(x - len([n for n in parent_node_array[:x] if n == -2]))
+            short_node_array.append(node_array[i])
 
-    num_1 = s_parent_na.count(1)
+    num_1 = short_parent_node_array.count(1)
     if num_1 >= 3:
         for i in range(num_1-2):
-            s_parent_na.insert(3,2)
-            for j in range(4,len(s_parent_na)):
-                s_parent_na[j] += 1
-            for k in range(len(s_parent_na)-1,0,-1):
-                if s_parent_na[k] <= i+2:
-                    s_parent_na[k] -= 1
-                if s_parent_na[k] == i+1:
+            short_parent_node_array.insert(3,2)
+            for j in range(4,len(short_parent_node_array)):
+                short_parent_node_array[j] += 1
+            for k in range(len(short_parent_node_array)-1,0,-1):
+                if short_parent_node_array[k] <= i+2:
+                    short_parent_node_array[k] -= 1
+                if short_parent_node_array[k] == i+1:
                     break
             temp = [0] * NODE_TYPE_NUM
             temp[50] = 1
-            s_na.insert(3,temp)
+            short_node_array.insert(3,temp)
 
     G = Digraph(format="png")
     G.attr("node", shape ="circle")
     edges = []
-    for i in range(1,len(s_parent_na)):
-        edges.append((s_parent_na[i],i))
+    for i in range(1,len(short_parent_node_array)):
+        edges.append((short_parent_node_array[i],i))
 
     for i,j in edges:
         G.edge(str(i),str(j))
-    for i in range(len(s_na)):
-        G.node(str(i), str(s_na[i].index(1)) ,color="blue")
-        #G.node(str(i), ruleNames_C[s_na[i].index(1)],color="blue")
+    for i in range(len(short_node_array)):
+        G.node(str(i), str(short_node_array[i].index(1)) ,color="blue")
+        #G.node(str(i), ruleNames_C[short_node_array[i].index(1)],color="blue")
     G.render("tree/" + name)
-    print(s_parent_na)
+    print(short_parent_node_array)
     return G
 
 def node_embedding(target_dir_path):
@@ -367,12 +457,20 @@ def my_len(l):
         return 1
 if __name__ == '__main__':
     args = sys.argv
-    #logging_setting_path = '../resources/logging/utiltools_log.conf'
-    #logging.config.fileConfig(logging_setting_path)
-    #logger = logging.getLogger(__file__)
-    flags.DEFINE_string('learning_type','node','Select learning mode (reinforcement, node, method).')
-    #target_file = args[1]
-    a,labels,c,d,e= load_ast_features("data/maven_dataset/",20,85)
-    num_node = pd.Series(np.nonzero(labels)[1]).value_counts()
-    print(num_node)
-    #node_embedding(target_file)
+    flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
+    FLAGS.dataset = "bcb_identifier"
+    flags.DEFINE_string('language', 'java', 'Dataset string.')  # 'cora', 'citeseer', 'pubmed'
+    
+    dim = 85
+    num = 42
+    read_lsi(dim+1)
+    #ノードベクトル作成
+    vector_dimension = 0
+    if FLAGS.language == "java":
+        vector_dimension = 85
+    elif FLAGS.language == "c":
+        vector_dimension = 201
+    temp = [0] * vector_dimension
+    temp = np.concatenate([temp,dictionary_node[86]])
+
+    get_input_features()

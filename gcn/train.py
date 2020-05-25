@@ -10,6 +10,7 @@ import sys
 from utils import *
 from models import GCN, MLP
 import pandas as pd
+from copy import deepcopy
 
 import requests
 
@@ -32,7 +33,7 @@ flags.DEFINE_string('dataset', 'small', 'Dataset string.')  # 'cora', 'citeseer'
 flags.DEFINE_string('model', 'gcn', 'Model string.')  # 'gcn', 'gcn_cheby', 'dense'
 flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
 flags.DEFINE_integer('epochs', 2500, 'Number of epochs to train.')
-flags.DEFINE_integer('hidden1', 256, 'Number of units in hidden layer 1.')
+flags.DEFINE_integer('hidden1', 128, 'Number of units in hidden layer 1.')
 flags.DEFINE_float('dropout', 0.2, 'Dropout rate (1 - keep probability).')
 flags.DEFINE_float('weight_decay', 5e-4, 'Weight for L2 loss on embedding matrix.')
 flags.DEFINE_integer('early_stopping', 10, 'Tolerance for early stopping (# of epochs).')
@@ -40,8 +41,10 @@ flags.DEFINE_integer('max_degree', 3, 'Maximum Chebyshev polynomial degree.')
 flags.DEFINE_integer('layers', 4, 'Number of layers to train.')
 flags.DEFINE_string('model_name', 'default', "Model name string.")
 flags.DEFINE_integer('class_num', 20, 'Number of dimension of output.')
-flags.DEFINE_integer('input_dim', 201, 'Dimension of input vectors. Java:85, C:201')
+flags.DEFINE_string('language', "java", 'Programming Language. java, c')
 flags.DEFINE_string('learning_type','raw','Select learning mode (reinforcement, node, method).')
+flags.DEFINE_boolean('normalize', False, 'Select whether normalizing identifier or not.')
+flags.DEFINE_integer('lsi', None, 'Set dimension of LSI (None means BoW)')
 FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
     FLAGS.model_name,
     FLAGS.dataset,
@@ -53,9 +56,20 @@ FLAGS.model_name = "{},{},{},{},{},{},{},{},{}".format(
     FLAGS.layers,
     FLAGS.learning_type
 )
+vector_dimension = 0
+if FLAGS.language == "java":
+    vector_dimension = 85
+elif FLAGS.language == "c":
+    vector_dimension = 201
+dictionary_filepath = f"data/{FLAGS.dataset}/dictionary.txt"
+if os.path.exists(dictionary_filepath):
+    vector_dimension += len(open(dictionary_filepath).readlines()) + 1
 
 # Load data
-adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num, FLAGS.input_dim)
+adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask, graph = load_data("data/{}".format(FLAGS.dataset), FLAGS.class_num, vector_dimension)
+log = open("log.txt","w")
+log.write(str(adj))
+log.write(str(len(y_train)))
 # Some preprocessing
 features = preprocess_features(features)
 if FLAGS.model == 'gcn':
@@ -83,10 +97,11 @@ placeholders = {
     'num_features_nonzero': tf.placeholder(tf.int32)  # helper variable for sparse dropout
 }
 train_acc = 0
+best_acc = 0
 while train_acc < 0.01:
     # Create model
     model = model_func(placeholders, input_dim=features[2][1], logging=True)
-
+    log.write(str(features))
     # Initialize session
     sess = tf.Session()
 
@@ -97,7 +112,6 @@ while train_acc < 0.01:
         feed_dict_val = construct_feed_dict(features, support, labels, mask, placeholders)
         outs_val = sess.run([model.loss, model.accuracy], feed_dict=feed_dict_val)
         return outs_val[0], outs_val[1], (time.time() - t_test)
-
 
     # Init variables
     sess.run(tf.global_variables_initializer())
@@ -133,15 +147,7 @@ while train_acc < 0.01:
         print("Epoch:", '%04d' % (epoch + 1), "train_loss=", "{:.5f}".format(outs[1]),
             "train_acc=", "{:.5f}".format(outs[2]), "val_loss=", "{:.5f}".format(cost),
             "val_acc=", "{:.5f}".format(acc), "time=", "{:.5f}".format(time.time() - t))
-        """
-        if epoch > FLAGS.early_stopping and cost_val[-1] > np.mean(cost_val[-(FLAGS.early_stopping+1):-1]):
-            print("Early stopping...")
-            break
-    
-        if outs[2] >= 0.77:
-            print("Early stopping...")
-            break
-        """
+
         train_acc = outs[2]
 
 print("Optimization Finished!")
